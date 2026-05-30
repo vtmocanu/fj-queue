@@ -31,7 +31,7 @@ import fj_queue as fq
 
 UTC = timezone.utc
 T0 = datetime(2026, 5, 27, 14, 3, 11, tzinfo=UTC)
-HOST = "git.wxs.ro"
+HOST = "git.example.com"
 
 
 def _runner(rid, *, status="active", labels=("grunt",), name=None):
@@ -121,7 +121,7 @@ def _good_tick(tag: str = "default"):
     """A small but realistic successful tick payload."""
     runners = [_runner(1, status="active", labels=("grunt",))]
     jobs = [_job(10, runs_on=("grunt",), needs=(), name=f"job-{tag}")]
-    repos = {85: "containers/theme-api"}
+    repos = {85: "owner-c/theme-api"}
     return (runners, jobs, repos)
 
 
