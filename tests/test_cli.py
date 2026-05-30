@@ -147,7 +147,7 @@ def test_version_flag_exits_zero(capsys):
     rc = fq.main(["--version"], stdout=io.StringIO(), stderr=io.StringIO())
     assert rc == fq.EXIT_OK
     captured = capsys.readouterr()
-    assert "fj-queue 2.0.0" in captured.out
+    assert f"fj-queue {fq.__version__}" in captured.out
 
 
 # ---------------------------------------------------------------------------
