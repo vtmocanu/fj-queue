@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://git.example.com/wxs/mackup/raw/branch/main/scripts/fj-queue/schema/fj-queue.v1.json",
+  "$id": "https://raw.githubusercontent.com/vtmocanu/fj-queue/main/schema/fj-queue.v1.json",
   "title": "fj-queue v1 snapshot",
   "description": "Open additive-only inner objects: new optional fields land in v1.x without bumping `schema_version`. The top-level oneOf branches (`SuccessEnvelope`, `ErrorEnvelope`) are closed only to disambiguate the two envelope shapes. Removal or repurposing of an existing key bumps `schema_version`.",
   "oneOf": [
@@ -24,7 +24,8 @@
         "warnings",
         "runner_pods",
         "metrics",
-        "ncps"
+        "ncps",
+        "ncps_error"
       ],
       "properties": {
         "schema_version": {
@@ -112,11 +113,15 @@
           }
         },
         "ncps": {
-          "description": "NCPS (nix cache proxy) cache activity from Prometheus, or null when metrics are disabled or the NCPS fetch failed.",
+          "description": "NCPS (nix cache proxy) cache activity from Prometheus, or null when NCPS is disabled (see ncps_error) or the NCPS fetch returned no data.",
           "oneOf": [
             { "type": "null" },
             { "$ref": "#/$defs/NcpsStatus" }
           ]
+        },
+        "ncps_error": {
+          "description": "Companion error field for ncps (additive M3 key, parallel to metrics.error). 'disabled' when NCPS is explicitly off (--no-ncps or config [ncps] enabled not set); null when the fetch succeeded or there is no NCPS-specific failure reason.",
+          "type": ["string", "null"]
         }
       }
     },
@@ -243,7 +248,7 @@
       "properties": {
         "pod": { "type": "string" },
         "node": {
-          "description": "Kubernetes node the pod runs on. Used for the blue/green cluster filter (node prefix k8s-node-* / k8s-node-*).",
+          "description": "Kubernetes node the pod runs on. Used for optional prefix-based filtering (--node-prefix / config [metrics] node_prefix).",
           "type": "string"
         },
         "cpu_cores": {

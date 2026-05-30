@@ -135,6 +135,7 @@ def test_empty_snapshot_has_all_v1_keys():
         "runner_pods",
         "metrics",
         "ncps",
+        "ncps_error",
     }
     assert d["schema_version"] == 1
     assert d["host"] == HOST
@@ -152,6 +153,10 @@ def test_empty_snapshot_has_all_v1_keys():
     }
     # NCPS: present and null on an empty/default snapshot.
     assert d["ncps"] is None
+    # ncps_error: null on this path because aggregate() defaults are neutral
+    # (no _do_one_fetch involved). The CLI default produces ncps_error="disabled"
+    # via _do_one_fetch when ncps_enabled=False (M3 additive key).
+    assert d["ncps_error"] is None
 
 
 def test_empty_snapshot_validates_against_schema(schema):
@@ -520,13 +525,15 @@ def test_schema_closes_only_the_two_oneof_branches_not_inner_objects(schema):
     assert "additionalProperties" not in error_obj
 
 
-def test_schema_rejects_missing_required_top_level_key(schema):
-    """The closed top-level envelope catches missing keys (drift
-    between to_dict and the schema). Dropping `warnings` should fail.
+@pytest.mark.parametrize("key", ["warnings", "ncps", "ncps_error"])
+def test_schema_rejects_missing_required_top_level_key(schema, key):
+    """The closed top-level envelope catches missing keys (drift between
+    to_dict and the schema). Dropping any required key must fail validation.
+    Covers the M3-added ncps_error key in addition to the original warnings.
     """
     snap = _snap()
     d = fq.to_dict(snap)
-    del d["warnings"]
+    del d[key]
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(d, schema)
 
@@ -631,7 +638,7 @@ def test_live_fixture_renders_valid_json(schema):
 # ---------------------------------------------------------------------------
 
 
-def _pod(name, *, node="k8s-node-1", cpu=0.01, mem=700_000_000, cpu_limit=None, mem_limit=None):
+def _pod(name, *, node="node-a-1", cpu=0.01, mem=700_000_000, cpu_limit=None, mem_limit=None):
     return fq.PodResource(
         pod=name,
         node=node,
@@ -650,20 +657,20 @@ def test_runner_pods_wire_shape_is_raw_numbers(schema):
     """
     pods = (
         _pod(
-            "forgejo-runner-qf4k7",
-            node="k8s-node-2",
+            "ci-runner-pod1",
+            node="node-a-1",
             cpu=0.00109,
             mem=763322368,
             cpu_limit=None,
             mem_limit=18674094196,
         ),
-        _pod("forgejo-runner-b5f9b", node="k8s-node-3", cpu=0.01023, mem=711917568),
+        _pod("ci-runner-pod3", node="node-a-3", cpu=0.01023, mem=711917568),
     )
     snap = _snap(runner_pods=pods)
     d = fq.to_dict(snap)
     assert d["runner_pods"][0] == {
-        "pod": "forgejo-runner-qf4k7",
-        "node": "k8s-node-2",
+        "pod": "ci-runner-pod1",
+        "node": "node-a-1",
         "cpu_cores": 0.00109,
         "memory_bytes": 763322368,
         "cpu_limit_cores": None,
@@ -731,6 +738,8 @@ def test_ncps_populated_wire_shape_is_raw_numbers(schema):
         "upstream_per_sec": 0.3,
         "bytes_per_sec": 4000000.0,
     }
+    # Active NCPS: ncps_error must be null (not "disabled").
+    assert d["ncps_error"] is None
     jsonschema.validate(d, schema)
 
 
@@ -745,6 +754,8 @@ def test_ncps_idle_wire_shape(schema):
     snap = _snap(ncps=_ncps(active=False, req=0.0, inflight=0, upstream=0.0, bytes_ps=0.0))
     d = fq.to_dict(snap)
     assert d["ncps"]["active"] is False
+    # Idle NCPS: ncps_error must be null (not "disabled").
+    assert d["ncps_error"] is None
     jsonschema.validate(d, schema)
 
 

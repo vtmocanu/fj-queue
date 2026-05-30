@@ -9,11 +9,11 @@
           "value": [1780051394.097, "0.00109"]
         },
         {
-          "metric": { "pod": "ci-runner-aaaa1111ff-pod3" },
+          "metric": { "pod": "ci-runner-aaaa1111ff-pod2" },
           "value": [1780051394.097, "0.00128"]
         },
         {
-          "metric": { "pod": "ci-runner-aaaa1111ff-pod2" },
+          "metric": { "pod": "ci-runner-aaaa1111ff-pod3" },
           "value": [1780051394.097, "0.01023"]
         }
       ]
@@ -29,11 +29,11 @@
           "value": [1780051394.499, "763322368"]
         },
         {
-          "metric": { "pod": "ci-runner-aaaa1111ff-pod3" },
+          "metric": { "pod": "ci-runner-aaaa1111ff-pod2" },
           "value": [1780051394.499, "643313664"]
         },
         {
-          "metric": { "pod": "ci-runner-aaaa1111ff-pod2" },
+          "metric": { "pod": "ci-runner-aaaa1111ff-pod3" },
           "value": [1780051394.499, "711917568"]
         }
       ]
@@ -48,8 +48,8 @@
           "metric": {
             "__name__": "kube_pod_info",
             "cluster": "k8s-cluster",
-            "namespace": "forgejo-runner",
-            "node": "k8s-node-2",
+            "namespace": "ci-runners",
+            "node": "node-a-1",
             "pod": "ci-runner-aaaa1111ff-pod1"
           },
           "value": [1780051394.745, "1"]
@@ -58,9 +58,9 @@
           "metric": {
             "__name__": "kube_pod_info",
             "cluster": "k8s-cluster",
-            "namespace": "forgejo-runner",
-            "node": "k8s-node-1",
-            "pod": "ci-runner-aaaa1111ff-pod3"
+            "namespace": "ci-runners",
+            "node": "node-a-2",
+            "pod": "ci-runner-aaaa1111ff-pod2"
           },
           "value": [1780051394.745, "1"]
         },
@@ -68,9 +68,9 @@
           "metric": {
             "__name__": "kube_pod_info",
             "cluster": "k8s-cluster",
-            "namespace": "forgejo-runner",
-            "node": "k8s-node-3",
-            "pod": "ci-runner-aaaa1111ff-pod2"
+            "namespace": "ci-runners",
+            "node": "node-a-3",
+            "pod": "ci-runner-aaaa1111ff-pod3"
           },
           "value": [1780051394.745, "1"]
         }
@@ -87,11 +87,11 @@
           "value": [1780052001.832, "18674094196"]
         },
         {
-          "metric": { "pod": "ci-runner-aaaa1111ff-pod3" },
+          "metric": { "pod": "ci-runner-aaaa1111ff-pod2" },
           "value": [1780052001.832, "18674094196"]
         },
         {
-          "metric": { "pod": "ci-runner-aaaa1111ff-pod2" },
+          "metric": { "pod": "ci-runner-aaaa1111ff-pod3" },
           "value": [1780052001.832, "18674094196"]
         }
       ]

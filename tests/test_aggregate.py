@@ -694,14 +694,14 @@ def test_live_fixture_aggregates_consistently():
 # ---------------------------------------------------------------------------
 
 
-def _pod(name, *, node="k8s-node-1", cpu=0.01, mem=700_000_000):
+def _pod(name, *, node="node-a-1", cpu=0.01, mem=700_000_000):
     return fq.PodResource(pod=name, node=node, cpu_cores=cpu, memory_bytes=mem)
 
 
 def test_runner_pods_pass_through_unchanged():
     pods = (
-        _pod("forgejo-runner-abc", node="k8s-node-1", cpu=0.001, mem=763322368),
-        _pod("forgejo-runner-def", node="k8s-node-2", cpu=0.01, mem=711917568),
+        _pod("forgejo-runner-abc", node="node-a-1", cpu=0.001, mem=763322368),
+        _pod("forgejo-runner-def", node="node-a-2", cpu=0.01, mem=711917568),
     )
     snap = _agg(runner_pods=pods)
     assert snap.runner_pods == pods

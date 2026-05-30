@@ -28,7 +28,7 @@
     },
     "name": "repo-a",
     "full_name": "owner-a/repo-a",
-    "description": "Crossplane composition for CloudNativePG (CNPG) database clusters - replaces wkc.cnpg",
+    "description": "Example repository description",
     "empty": false,
     "private": true,
     "fork": false,

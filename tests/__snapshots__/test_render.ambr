@@ -44,9 +44,9 @@
   NCPS: no data
   
   PER REPO (3 repos):
-    owner-c/theme-api              running=0  waiting=2  total=2
-    owner-b/harbor                 running=0  waiting=1  total=1
     owner-a/repo-a                    running=1  waiting=0  total=1
+    owner-b/harbor                    running=0  waiting=1  total=1
+    owner-c/theme-api                 running=0  waiting=2  total=2
   
   QUEUE (3 waiting):
     #1   [unschedulable      ] job_id=79969  repo=owner-b/harbor  name="pipeline"
@@ -123,9 +123,9 @@
   RUNNERS (1 online of 1):
     k8s-runner               active   online   v12.7.3    labels=[grunt]  ephemeral=False
   
-  RUNNER RESOURCES: disabled (--no-metrics)
+  RUNNER RESOURCES: disabled
   
-  NCPS: disabled (--no-metrics)
+  NCPS: disabled
   
   PER REPO (0 repos):
     (none)
@@ -175,8 +175,8 @@
     k8s-runner               active   online   v12.7.3    labels=[docker, grunt]  ephemeral=False
   
   RUNNER RESOURCES (per pod, 2):
-    ci-runner-aaaa1111ff-pod1          node=k8s-node-2  cpu=0.001 / -  mem=728 MiB / 17.4 GiB
-    ci-runner-aaaa1111ff-pod2          node=k8s-node-3  cpu=0.010 / -  mem=679 MiB / 17.4 GiB
+    ci-runner-aaaa1111ff-pod1                node=node-a-1       cpu=0.001 / -  mem=728 MiB / 17.4 GiB
+    ci-runner-aaaa1111ff-pod3                node=node-a-3       cpu=0.010 / -  mem=679 MiB / 17.4 GiB
   
   NCPS: no data
   
@@ -208,24 +208,24 @@
   NCPS: no data
   
   PER REPO (2 repos):
-    owner-c/cafe                   running=0  waiting=1  total=1
-    owner-c/test-repo                running=0  waiting=1  total=1
+    owner-c/café                      running=0  waiting=1  total=1
+    owner-c/测试-repo                   running=0  waiting=1  total=1
   
   QUEUE (2 waiting):
-    #1   [waiting_for_runner ] job_id=42  repo=owner-c/test-repo  name="🚀 Deploy"
+    #1   [waiting_for_runner ] job_id=42  repo=owner-c/测试-repo  name="🚀 Deploy"
           attempt=1  runs_on=[测试]  needs=[]
-    #2   [unschedulable      ] job_id=43  repo=owner-c/cafe  name="café-job"
+    #2   [unschedulable      ] job_id=43  repo=owner-c/café  name="café-job"
           attempt=1  runs_on=[nonexistent]  needs=[]
   
   WARNINGS (1):
-    unschedulable_labels  job_id=43  repo=owner-c/cafe  runs_on=[nonexistent]
+    unschedulable_labels  job_id=43  repo=owner-c/café  runs_on=[nonexistent]
       -> No online runner can satisfy runs_on: ['nonexistent']
   '''
 # ---
 # name: test_rich_golden_snapshot_empty_width_120_no_color
   '''
   ╭─────────────────────────── snapshot ───────────────────────────╮
-  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z             │
+  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z        │
   │ runners: 0 online / 0    totals: running=0  waiting=0  total=0 │
   ╰────────────────────────────────────────────────────────────────╯
                             Runners                          
@@ -259,7 +259,7 @@
 # name: test_rich_golden_snapshot_width_120_no_color
   '''
   ╭─────────────────────────── snapshot ───────────────────────────╮
-  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z             │
+  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z        │
   │ runners: 2 online / 3    totals: running=1  waiting=3  total=4 │
   │ schedulable_labels: [docker, gpu, grunt]                       │
   ╰────────────────────────────────────────────────────────────────╯
@@ -278,35 +278,35 @@
   │ (none) │      │             │                     │
   └────────┴──────┴─────────────┴─────────────────────┘
   NCPS: no data
-                        Per repo                      
-  ┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┓
-  ┃ repo                 ┃ running ┃ waiting ┃ total ┃
-  ┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━┩
-  │ owner-c/theme-api │       0 │       2 │     2 │
+                      Per repo                     
+  ┏━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┓
+  ┃ repo              ┃ running ┃ waiting ┃ total ┃
+  ┡━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━┩
+  │ owner-a/repo-a    │       1 │       0 │     1 │
   │ owner-b/harbor    │       0 │       1 │     1 │
-  │ owner-a/repo-a       │       1 │       0 │     1 │
-  └──────────────────────┴─────────┴─────────┴───────┘
-                                         Queue (waiting, FIFO approx)                                        
-  ┏━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓
-  ┃ # ┃ job_id ┃ repo                 ┃ job_name         ┃   attempt ┃ runs_on ┃ needs ┃ blocked_reason     ┃
-  ┡━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩
+  │ owner-c/theme-api │       0 │       2 │     2 │
+  └───────────────────┴─────────┴─────────┴───────┘
+                                        Queue (waiting, FIFO approx)                                      
+  ┏━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓
+  ┃ # ┃ job_id ┃ repo              ┃ job_name         ┃   attempt ┃ runs_on ┃ needs ┃ blocked_reason     ┃
+  ┡━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩
   │ 1 │  79969 │ owner-b/harbor    │ pipeline         │         1 │ special │ -     │ unschedulable      │
   │ 2 │  80239 │ owner-c/theme-api │ Semantic Release │         1 │ grunt   │ -     │ waiting_for_runner │
   │ 3 │  80300 │ owner-c/theme-api │ Deploy           │ 2 (rerun) │ grunt   │ build │ blocked_on_needs   │
-  └───┴────────┴──────────────────────┴──────────────────┴───────────┴─────────┴───────┴────────────────────┘
-                                                       Warnings                                                      
-  ┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-  ┃ code                 ┃ job_id ┃ repo              ┃ runs_on ┃ message                                           ┃
-  ┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+  └───┴────────┴───────────────────┴──────────────────┴───────────┴─────────┴───────┴────────────────────┘
+                                                      Warnings                                                    
+  ┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+  ┃ code                 ┃ job_id ┃ repo           ┃ runs_on ┃ message                                           ┃
+  ┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
   │ unschedulable_labels │  79969 │ owner-b/harbor │         │ No online runner can satisfy runs_on: ['special'] │
-  └──────────────────────┴────────┴───────────────────┴─────────┴───────────────────────────────────────────────────┘
+  └──────────────────────┴────────┴────────────────┴─────────┴───────────────────────────────────────────────────┘
   
   '''
 # ---
 # name: test_rich_metrics_unavailable_golden_width_120_no_color
   '''
   ╭─────────────────────────── snapshot ───────────────────────────╮
-  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z             │
+  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z        │
   │ runners: 1 online / 1    totals: running=0  waiting=0  total=0 │
   │ schedulable_labels: [docker, grunt]                            │
   ╰────────────────────────────────────────────────────────────────╯
@@ -336,7 +336,7 @@
 # name: test_rich_ncps_active_golden_width_120_no_color
   '''
   ╭─────────────────────────── snapshot ───────────────────────────╮
-  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z             │
+  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z        │
   │ runners: 1 online / 1    totals: running=0  waiting=0  total=0 │
   │ schedulable_labels: [grunt]                                    │
   ╰────────────────────────────────────────────────────────────────╯
@@ -371,7 +371,7 @@
 # name: test_rich_ncps_unavailable_golden_width_120_no_color
   '''
   ╭─────────────────────────── snapshot ───────────────────────────╮
-  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z             │
+  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z        │
   │ runners: 1 online / 1    totals: running=0  waiting=0  total=0 │
   │ schedulable_labels: [grunt]                                    │
   ╰────────────────────────────────────────────────────────────────╯
@@ -401,7 +401,7 @@
 # name: test_rich_runner_resources_golden_width_120_no_color
   '''
   ╭─────────────────────────── snapshot ───────────────────────────╮
-  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z             │
+  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z        │
   │ runners: 1 online / 1    totals: running=0  waiting=0  total=0 │
   │ schedulable_labels: [docker, grunt]                            │
   ╰────────────────────────────────────────────────────────────────╯
@@ -411,13 +411,13 @@
   ┡━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
   │ k8s-runner │ active │  yes   │ v12.7.3 │ docker, grunt │    no     │
   └────────────┴────────┴────────┴─────────┴───────────────┴───────────┘
-                                Runner resources (per pod)                               
-  ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
-  ┃ pod                             ┃ node          ┃ cpu (cores) ┃ mem (usage / limit) ┃
-  ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
-  │ ci-runner-aaaa1111ff-pod1 │ k8s-node-2 │   0.001 / — │  728 MiB / 17.4 GiB │
-  │ ci-runner-aaaa1111ff-pod2 │ k8s-node-3 │   0.010 / — │  679 MiB / 17.4 GiB │
-  └─────────────────────────────────┴───────────────┴─────────────┴─────────────────────┘
+                           Runner resources (per pod)                         
+  ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
+  ┃ pod                       ┃ node     ┃ cpu (cores) ┃ mem (usage / limit) ┃
+  ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
+  │ ci-runner-aaaa1111ff-pod1 │ node-a-1 │   0.001 / — │  728 MiB / 17.4 GiB │
+  │ ci-runner-aaaa1111ff-pod3 │ node-a-3 │   0.010 / — │  679 MiB / 17.4 GiB │
+  └───────────────────────────┴──────────┴─────────────┴─────────────────────┘
   NCPS: no data
                  Per repo               
   ┏━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┓
