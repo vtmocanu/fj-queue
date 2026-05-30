@@ -1,0 +1,38 @@
+name: release
+
+# On each v* tag, bump Formula/fj-queue.rb in vtmocanu/homebrew-tap (version +
+# tarball sha256). The default GITHUB_TOKEN cannot write to a second repo, so
+# the cross-repo push uses HOMEBREW_TAP_TOKEN (a fine-grained PAT scoped to
+# vtmocanu/homebrew-tap with contents:write). When that token can push to the
+# tap, the action commits directly to main (no fork, no PR).
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to bump the formula to (e.g. v2.0.0)"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  bump-tap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Bump fj-queue formula in vtmocanu/homebrew-tap
+        uses: mislav/bump-homebrew-formula-action@ccf2332299a883f6af50a1d2d41e5df7904dd769 # v4.1
+        with:
+          formula-name: fj-queue
+          homebrew-tap: vtmocanu/homebrew-tap
+          tag-name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          create-pullrequest: false
+        env:
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
