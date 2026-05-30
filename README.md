@@ -74,3 +74,5 @@ all supported keys.
 | [JSON contract](docs/json-contract.md) | Schema shape, ordering, stability guarantees |
 | [Metrics and NCPS](docs/metrics-ncps.md) | Per-pod CPU/memory and NCPS cache status (opt-in) |
 | [Caveats](docs/caveats.md) | FIFO approximation, blocked jobs, filter scope |
+
+See also: [Homelab Adventures: fj-queue](https://hai.wxs.ro/custom-tools/fj-queue/) for the background and design notes.
