@@ -36,7 +36,7 @@ import fj_queue as fq
 
 UTC = timezone.utc
 T0 = datetime(2026, 5, 28, 12, 0, 0, tzinfo=UTC)
-HOST = "git.wxs.ro"
+HOST = "git.example.com"
 
 # Performance budgets, in seconds. Each is the wall-clock cap for ONE
 # invocation of the named stage at the 2000-job / 50-repo scale.

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 from pathlib import Path
 
 import httpx
@@ -27,7 +28,7 @@ import fj_queue as fq
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 
-HOST = "git.wxs.ro"
+HOST = "git.example.com"
 
 
 # ---------------------------------------------------------------------------
@@ -97,29 +98,31 @@ def _typical_client():
             _job(79969, status="waiting", repo_id=586, runs_on=("special",), name="pipeline"),
             _job(83886, status="running", task_id=85492, repo_id=589, runs_on=("grunt",), name="Chainsaw"),
         ],
-        repos={85: "containers/theme-api", 586: "crossplane/harbor", 589: "owner-a/repo-a"},
+        repos={85: "owner-c/theme-api", 586: "owner-b/harbor", 589: "owner-a/repo-a"},
     )
 
 
 def _run(argv, *, client=None, is_tty=False, env_token="tok"):
     """Invoke main() with captured streams. Returns (rc, stdout, stderr).
 
-    Metrics are ON by default in production, but these CLI tests are
-    offline (FakeClient for Forgejo, no Prometheus mock). So unless a
-    test explicitly opts in (any --metrics* flag), we add --no-metrics
-    to keep the run from reaching out to the real Prometheus. Tests that
-    exercise the metrics path pass --metrics-url + their own respx mock.
+    Metrics are OFF by default (M2). Tests that exercise the enabled path
+    explicitly pass --metrics-url + their own respx mock.
     """
     out, err = io.StringIO(), io.StringIO()
     # main() resolves the token; default to passing --token so tests
     # don't depend on the ambient environment.
     if env_token is not None and "--token" not in argv and "--schema" not in argv:
         argv = [*argv, "--token", env_token]
-    opted_into_metrics = any(
-        a == "--no-metrics" or a.startswith("--metrics") for a in argv
-    )
-    if not opted_into_metrics and "--schema" not in argv:
-        argv = [*argv, "--no-metrics"]
+    # main() now requires a host (no built-in default). Supply HOST so
+    # tests that do not exercise host-resolution behavior stay working.
+    # Tests that explicitly pass --host override this injection.
+    if "--host" not in argv and "--schema" not in argv:
+        argv = [*argv, "--host", HOST]
+    # Isolate from any stray ./fj-queue.toml in the developer's cwd and from
+    # ~/.config/fj-queue/config.toml (M4 GAP1). /dev/null is always empty
+    # so tomllib returns {} -- identical to "no config file found".
+    if "--config" not in argv and "--schema" not in argv:
+        argv = [*argv, "--config", os.devnull]
     rc = fq.main(argv, client=client, stdout=out, stderr=err, is_tty=is_tty)
     return rc, out.getvalue(), err.getvalue()
 
@@ -144,7 +147,7 @@ def test_version_flag_exits_zero(capsys):
     rc = fq.main(["--version"], stdout=io.StringIO(), stderr=io.StringIO())
     assert rc == fq.EXIT_OK
     captured = capsys.readouterr()
-    assert "fj-queue 1.0.0" in captured.out
+    assert "fj-queue 2.0.0" in captured.out
 
 
 # ---------------------------------------------------------------------------
@@ -234,7 +237,7 @@ def test_missing_token_exit_2(monkeypatch):
     monkeypatch.delenv("FORGEJO_TOKEN", raising=False)
     out, err = io.StringIO(), io.StringIO()
     rc = fq.main(
-        ["--format", "json"],
+        ["--format", "json", "--host", HOST],
         client=_typical_client(),
         stdout=out,
         stderr=err,
@@ -254,7 +257,7 @@ def test_main_scrubs_token_from_json_error_envelope():
     client = FakeClient(error=fq.ConnectionError(f"boom with {secret} in it"))
     out, err = io.StringIO(), io.StringIO()
     rc = fq.main(
-        ["--format", "json", "--once", "--token", secret],
+        ["--format", "json", "--once", "--token", secret, "--host", HOST],
         client=client, stdout=out, stderr=err, is_tty=False,
     )
     assert rc == fq.EXIT_CONNECTION
@@ -278,7 +281,7 @@ def test_main_token_arg_beats_env_proven_via_scrub(monkeypatch):
     )
     out, err = io.StringIO(), io.StringIO()
     fq.main(
-        ["--format", "json", "--once", "--token", arg_token],
+        ["--format", "json", "--once", "--token", arg_token, "--host", HOST],
         client=client, stdout=out, stderr=err, is_tty=False,
     )
     rendered = out.getvalue()
@@ -296,7 +299,7 @@ def test_main_env_token_used_when_no_arg(monkeypatch):
     )
     out, err = io.StringIO(), io.StringIO()
     fq.main(
-        ["--format", "json", "--once"],
+        ["--format", "json", "--once", "--host", HOST],
         client=client, stdout=out, stderr=err, is_tty=False,
     )
     rendered = out.getvalue()
@@ -325,27 +328,27 @@ def test_repo_filter_scopes_queue_only_totals_stay_instance_wide():
     line 94, §Progress checkpoint M6 line 159).
 
     _typical_client() has 3 jobs (2 waiting + 1 running) across 3
-    repos; --repo containers/theme-api keeps only that repo's job in
+    repos; --repo owner-c/theme-api keeps only that repo's job in
     queue but the global totals remain unchanged.
     """
     rc, out, err = _run(
-        ["--format", "json", "--repo", "containers/theme-api"],
+        ["--format", "json", "--repo", "owner-c/theme-api"],
         client=_typical_client(),
     )
     assert rc == fq.EXIT_OK
     parsed = json.loads(out)
-    assert parsed["filter"]["repo"] == "containers/theme-api"
+    assert parsed["filter"]["repo"] == "owner-c/theme-api"
     # totals are instance-wide: 2 waiting + 1 running across the 3 jobs.
     assert parsed["totals"] == {"running": 1, "waiting": 2, "total": 3}
     # per_repo lists ALL repos, not just the filtered one.
     repos_in_breakdown = {r["repo"] for r in parsed["per_repo"]}
     assert repos_in_breakdown == {
-        "containers/theme-api",
-        "crossplane/harbor",
+        "owner-c/theme-api",
+        "owner-b/harbor",
         "owner-a/repo-a",
     }
     # queue is scoped to the requested repo only.
-    assert all(j["repo"] == "containers/theme-api" for j in parsed["queue"])
+    assert all(j["repo"] == "owner-c/theme-api" for j in parsed["queue"])
     assert len(parsed["queue"]) == 1
 
 
@@ -420,8 +423,8 @@ def test_label_filter_subset_semantics():
     assert parsed["totals"]["waiting"] == 2
     assert parsed["totals"]["total"] == 3
     assert {r["repo"] for r in parsed["per_repo"]} == {
-        "containers/theme-api",
-        "crossplane/harbor",
+        "owner-c/theme-api",
+        "owner-b/harbor",
         "owner-a/repo-a",
     }
 
@@ -520,11 +523,19 @@ def test_parser_defaults():
     assert args.mode is None
     assert args.format == "rich"
     assert args.interval == 2.0
-    assert args.host == "git.wxs.ro"
+    # --host no longer has a built-in default; resolve_host() is
+    # required to supply a host before Config is constructed.
+    assert args.host is None
+    # --config: no default (auto-discovery runs when None)
+    assert args.config is None
     assert args.timeout == 10.0
     assert args.label is None
     assert args.repo is None
     assert args.schema is False
+    # --metrics/--no-metrics: None means "neither flag given; check config"
+    assert args.metrics is None
+    # --node-prefix replaces --metrics-cluster; default None (no filter)
+    assert args.node_prefix is None
 
 
 def test_parser_watch_alias_sets_mode():
@@ -549,7 +560,7 @@ def test_stderr_diagnostic_scrubs_token_in_plain_mode():
     client = FakeClient(error=fq.ConnectionError(f"boom with {secret} embedded"))
     out, err = io.StringIO(), io.StringIO()
     rc = fq.main(
-        ["--format", "plain", "--once", "--token", secret],
+        ["--format", "plain", "--once", "--token", secret, "--host", HOST],
         client=client, stdout=out, stderr=err, is_tty=False,
     )
     assert rc == fq.EXIT_CONNECTION
@@ -567,7 +578,7 @@ def test_stderr_diagnostic_scrubs_token_in_json_mode():
     client = FakeClient(error=fq.ConnectionError(f"fail near {secret} now"))
     out, err = io.StringIO(), io.StringIO()
     fq.main(
-        ["--format", "json", "--once", "--token", secret],
+        ["--format", "json", "--once", "--token", secret, "--host", HOST],
         client=client, stdout=out, stderr=err, is_tty=False,
     )
     assert secret not in err.getvalue()
@@ -723,15 +734,16 @@ def test_cli_no_metrics_sets_disabled_marker():
 
 @respx.mock
 def test_cli_metrics_enabled_populates_runner_pods():
-    """Default metrics-on path: with a reachable (mocked) Prometheus the
+    """--metrics opt-in path: with a reachable (mocked) Prometheus the
     JSON carries populated runner_pods with raw usage + limit numbers.
     """
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(side_effect=_prom_handler())
 
     rc, out, err = _run(
-        ["--format", "json", "--once", "--metrics-url", "https://prometheus.wxs.ro"],
+        ["--format", "json", "--once", "--metrics",
+         "--metrics-url", "https://prometheus.example.com"],
         client=_typical_client(),
     )
     assert rc == fq.EXIT_OK
@@ -739,18 +751,40 @@ def test_cli_metrics_enabled_populates_runner_pods():
     assert parsed["metrics"]["error"] is None
     pods = {p["pod"]: p for p in parsed["runner_pods"]}
     assert len(pods) == 3
-    qf = pods["forgejo-runner-54746685ff-qf4k7"]
+    qf = pods["ci-runner-aaaa1111ff-pod1"]
     assert qf["memory_bytes"] == 763322368
     assert qf["memory_limit_bytes"] == 18674094196
     assert qf["cpu_limit_cores"] is None
-    # NCPS status also populated from the same Prometheus fetch.
+    # NCPS is independent of metrics; without --ncps it stays disabled.
+    assert parsed["ncps"] is None
+    assert parsed["ncps_error"] == "disabled"
+
+
+@respx.mock
+def test_cli_metrics_and_ncps_both_enabled():
+    """--metrics --ncps: both fetch from the same mocked Prometheus."""
+    respx.get(
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
+    ).mock(side_effect=_prom_handler())
+
+    rc, out, err = _run(
+        ["--format", "json", "--once", "--metrics", "--ncps",
+         "--metrics-url", "https://prometheus.example.com"],
+        client=_typical_client(),
+    )
+    assert rc == fq.EXIT_OK
+    parsed = json.loads(out)
+    assert parsed["metrics"]["error"] is None
+    assert len(parsed["runner_pods"]) == 3
+    # NCPS also populated.
     assert parsed["ncps"] is not None
     assert parsed["ncps"]["active"] is True
     assert parsed["ncps"]["requests_per_sec"] == 8.5
+    assert parsed["ncps_error"] is None
 
 
-def test_cli_no_metrics_sets_ncps_null():
-    """--no-metrics: ncps is null (distinct from a populated status)."""
+def test_cli_no_metrics_sets_ncps_disabled():
+    """--no-metrics: ncps is null and ncps_error is 'disabled' (both off)."""
     rc, out, err = _run(
         ["--format", "json", "--once", "--no-metrics"],
         client=_typical_client(),
@@ -758,6 +792,7 @@ def test_cli_no_metrics_sets_ncps_null():
     assert rc == fq.EXIT_OK
     parsed = json.loads(out)
     assert parsed["ncps"] is None
+    assert parsed["ncps_error"] == "disabled"
 
 
 @respx.mock
@@ -766,11 +801,12 @@ def test_cli_metrics_failure_degrades_gracefully():
     empty, metrics.error carries the reason (not "disabled").
     """
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(return_value=httpx.Response(500, text="boom"))
 
     rc, out, err = _run(
-        ["--format", "json", "--once", "--metrics-url", "https://prometheus.wxs.ro"],
+        ["--format", "json", "--once", "--metrics",
+         "--metrics-url", "https://prometheus.example.com"],
         client=_typical_client(),
     )
     assert rc == fq.EXIT_OK

@@ -1,0 +1,24 @@
+# fj-queue configuration example: copy to fj-queue.toml or
+# ~/.config/fj-queue/config.toml and adjust for your environment.
+#
+# Precedence (highest wins): CLI flag > environment variable > this file > built-in default.
+# The API token is NEVER stored here. Use --token or $FORGEJO_TOKEN.
+
+host = "git.example.com"
+
+# Per-pod runner CPU/memory metrics (from Prometheus). OFF by default.
+# A Prometheus URL is required when metrics or ncps is enabled.
+# Omitting [metrics] entirely is the same as enabled = false.
+[metrics]
+enabled = false
+url = "https://prometheus.example.com"
+namespace = "ci-runners"
+# node_prefix filters runner pods by Kubernetes node name prefix.
+# Leave empty (or omit) to include all pods.
+node_prefix = "k8s-node-"
+
+# NCPS cache-status display (from the same Prometheus source). OFF by default.
+# Independent of [metrics]: you can enable one without the other.
+# A Prometheus URL (above) is required when ncps is enabled.
+[ncps]
+enabled = false

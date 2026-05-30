@@ -26,7 +26,7 @@ import fj_queue as fq
 # ---------------------------------------------------------------------------
 
 NOW = datetime(2026, 5, 27, 14, 3, 11, tzinfo=timezone.utc)
-HOST = "git.wxs.ro"
+HOST = "git.example.com"
 
 
 def _runner(rid, *, status="active", labels=("grunt",), name=None, version="v12.7.3", ephemeral=False):
@@ -87,8 +87,8 @@ def _typical_snap():
         runners=runners,
         jobs=jobs,
         repo_names={
-            85: "containers/theme-api",
-            586: "crossplane/harbor",
+            85: "owner-c/theme-api",
+            586: "owner-b/harbor",
             589: "owner-a/repo-a",
         },
     )
@@ -182,7 +182,7 @@ def test_plain_filter_dashes_when_unset():
 def test_plain_header_carries_as_of_and_host():
     out = fq.render_plain(_typical_snap())
     assert "as_of=2026-05-27T14:03:11Z" in out
-    assert "host=git.wxs.ro" in out
+    assert "host=git.example.com" in out
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +257,7 @@ def test_rich_text_includes_visible_job_identifiers():
     text = _render_rich_to_text(_typical_snap(), width=200)
     assert "80239" in text  # the waiting-for-runner job
     assert "79969" in text  # the unschedulable job
-    assert "containers/theme-api" in text
+    assert "owner-c/theme-api" in text
     # Rerun marker visible (job 80300 has attempt=2).
     assert "rerun" in text
 
@@ -365,7 +365,7 @@ def _unicode_snap():
     return _snap(
         runners=runners,
         jobs=jobs,
-        repo_names={1: "containers/测试-repo", 2: "containers/café"},
+        repo_names={1: "owner-c/测试-repo", 2: "owner-c/café"},
     )
 
 
@@ -378,8 +378,8 @@ def test_plain_renders_wide_chars_and_emoji_without_crash():
     assert "测试-runner" in out
     assert "café-runner" in out
     assert "🚀 Deploy" in out
-    assert "containers/测试-repo" in out
-    assert "containers/café" in out
+    assert "owner-c/测试-repo" in out
+    assert "owner-c/café" in out
     # The frame is still ASCII (no box-drawing).
     for ch in out:
         cp = ord(ch)
@@ -533,16 +533,16 @@ def _pods():
     # Mirrors live reality: memory limit set (~17.4 GiB), no CPU limit.
     return (
         fq.PodResource(
-            pod="forgejo-runner-54746685ff-qf4k7",
-            node="k8s-green-wn2",
+            pod="ci-runner-aaaa1111ff-pod1",
+            node="node-a-1",
             cpu_cores=0.00109,
             memory_bytes=763322368,
             cpu_limit_cores=None,
             memory_limit_bytes=18674094196,
         ),
         fq.PodResource(
-            pod="forgejo-runner-54746685ff-b5f9b",
-            node="k8s-green-wn3",
+            pod="ci-runner-aaaa1111ff-pod3",
+            node="node-a-3",
             cpu_cores=0.01023,
             memory_bytes=711917568,
             cpu_limit_cores=None,
@@ -562,15 +562,15 @@ def _metrics_error_snap():
     return _snap(
         runners=runners,
         runner_pods=(),
-        metrics_error="timeout querying prometheus at https://prometheus.wxs.ro",
+        metrics_error="timeout querying prometheus at https://prometheus.example.com",
     )
 
 
 def test_plain_renders_runner_resources_section():
     out = fq.render_plain(_metrics_snap())
     assert "RUNNER RESOURCES (per pod, 2):" in out
-    assert "forgejo-runner-54746685ff-qf4k7" in out
-    assert "node=k8s-green-wn2" in out
+    assert "ci-runner-aaaa1111ff-pod1" in out
+    assert "node=node-a-1" in out
     # usage / limit: cpu to 3 decimals with ASCII `-` for the absent CPU
     # limit; mem usage in MiB, limit in GiB (18674094196 -> 17.4 GiB).
     assert "cpu=0.001 / -" in out
@@ -592,7 +592,7 @@ def test_plain_renders_cpu_limit_when_set():
     pods = (
         fq.PodResource(
             pod="p1",
-            node="k8s-green-wn1",
+            node="node-a-1",
             cpu_cores=0.015,
             memory_bytes=763322368,
             cpu_limit_cores=0.5,
@@ -628,7 +628,7 @@ def test_plain_metrics_unavailable_no_ansi_no_box_drawing():
 def test_rich_renders_runner_resources_table():
     text = _render_rich_to_text(_metrics_snap(), width=120, color=False)
     assert "Runner resources (per pod)" in text
-    assert "qf4k7" in text
+    assert "pod1" in text
     # usage / limit cells: mem usage MiB + limit GiB; cpu limit em dash.
     assert "728 MiB / 17.4 GiB" in text
     assert "0.001 / —" in text  # rich uses the em dash for a None limit
@@ -658,19 +658,24 @@ def test_rich_metrics_unavailable_golden_width_120_no_color(snapshot):
 
 def _metrics_disabled_snap():
     runners = [_runner(3, name="k8s-runner", status="active", labels=("grunt",))]
-    return _snap(runners=runners, runner_pods=(), metrics_error=fq.METRICS_DISABLED)
+    return _snap(
+        runners=runners,
+        runner_pods=(),
+        metrics_error=fq.METRICS_DISABLED,
+        ncps_error=fq.NCPS_DISABLED,
+    )
 
 
 def test_plain_disabled_reads_as_toggle_not_failure():
     out = fq.render_plain(_metrics_disabled_snap())
-    assert "RUNNER RESOURCES: disabled (--no-metrics)" in out
+    assert "RUNNER RESOURCES: disabled" in out
     # Must NOT read like an error.
     assert "unavailable" not in out
 
 
 def test_rich_disabled_reads_as_toggle_not_failure():
     text = _render_rich_to_text(_metrics_disabled_snap(), width=120, color=False)
-    assert "Runner resources: disabled (--no-metrics)" in text
+    assert "Runner resources: disabled" in text
     assert "unavailable" not in text
 
 
@@ -689,9 +694,9 @@ def _ncps(active=True, req=8.5, inflight=1, upstream=0.3, bytes_ps=4000000.0):
     )
 
 
-def _ncps_snap(ncps=None, metrics_error=None):
+def _ncps_snap(ncps=None, metrics_error=None, ncps_error=None):
     runners = [_runner(3, name="k8s-runner", status="active", labels=("grunt",))]
-    return _snap(runners=runners, ncps=ncps, metrics_error=metrics_error)
+    return _snap(runners=runners, ncps=ncps, metrics_error=metrics_error, ncps_error=ncps_error)
 
 
 def test_plain_ncps_active_line():
@@ -707,8 +712,8 @@ def test_plain_ncps_idle_line():
 
 
 def test_plain_ncps_disabled_line():
-    out = fq.render_plain(_ncps_snap(ncps=None, metrics_error=fq.METRICS_DISABLED))
-    assert "NCPS: disabled (--no-metrics)" in out
+    out = fq.render_plain(_ncps_snap(ncps=None, ncps_error=fq.NCPS_DISABLED))
+    assert "NCPS: disabled" in out
 
 
 def test_plain_ncps_unavailable_line():
@@ -727,10 +732,29 @@ def test_plain_ncps_no_data_line_distinct_from_failure():
     assert "NCPS: unavailable" not in out
 
 
+def test_plain_ncps_no_data_when_metrics_off_ncps_on():
+    """metrics-off + ncps-on + no Prometheus data must render "no data",
+    NOT "unavailable (disabled)" (NB-1 fix: METRICS_DISABLED as fallback
+    metrics_error must not bleed into the NCPS display as a misleading reason).
+    """
+    snap = _ncps_snap(ncps=None, ncps_error=None, metrics_error=fq.METRICS_DISABLED)
+    out = fq.render_plain(snap)
+    assert "NCPS: no data" in out
+    assert "unavailable" not in out
+
+
+def test_rich_ncps_no_data_when_metrics_off_ncps_on():
+    """Same fix verified on the Rich renderer path."""
+    snap = _ncps_snap(ncps=None, ncps_error=None, metrics_error=fq.METRICS_DISABLED)
+    text = _render_rich_to_text(snap, width=120, color=False)
+    assert "NCPS: no data" in text
+    assert "unavailable" not in text
+
+
 def test_plain_ncps_line_is_ascii_only():
     for snap in (
         _ncps_snap(ncps=_ncps()),
-        _ncps_snap(ncps=None, metrics_error=fq.METRICS_DISABLED),
+        _ncps_snap(ncps=None, ncps_error=fq.NCPS_DISABLED),
     ):
         out = fq.render_plain(snap)
         assert "\x1b[" not in out
@@ -764,7 +788,9 @@ def test_plain_ncps_idle_golden(snapshot):
 
 
 def test_plain_ncps_disabled_golden(snapshot):
-    assert fq.render_plain(_ncps_snap(ncps=None, metrics_error=fq.METRICS_DISABLED)) == snapshot
+    assert fq.render_plain(
+        _ncps_snap(ncps=None, metrics_error=fq.METRICS_DISABLED, ncps_error=fq.NCPS_DISABLED)
+    ) == snapshot
 
 
 def test_rich_ncps_active_golden_width_120_no_color(snapshot):

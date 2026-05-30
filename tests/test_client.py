@@ -65,9 +65,10 @@ def test_config_error_exit_code():
 # ---------------------------------------------------------------------------
 # Metrics URL precedence (resolve_metrics_url)
 #
-# Mirrors the resolve_token precedence tests above, but unlike the token
-# there is no error case: a built-in default (prometheus.wxs.ro) always
-# exists. Precedence: --metrics-url arg > $FJ_QUEUE_METRICS_URL env > default.
+# Mirrors the resolve_token precedence tests above. Precedence:
+# --metrics-url arg > $FJ_QUEUE_METRICS_URL env > config_value > "" (empty).
+# Unlike resolve_token there is no error case here; the empty string is
+# the sentinel for "not configured" (validated later in main()).
 # ---------------------------------------------------------------------------
 
 
@@ -109,16 +110,16 @@ def test_config_repr_masks_token():
     M4 (Rich panels), and M5 (watch-mode error display) will all serialize
     Config into user-facing output.
     """
-    c = fq.Config(host="git.wxs.ro", token="SECRETXYZ", timeout=5.0)
+    c = fq.Config(host="git.example.com", token="SECRETXYZ", timeout=5.0)
     assert "SECRETXYZ" not in repr(c)
     assert "SECRETXYZ" not in str(c)
     assert "***" in repr(c)
-    assert "git.wxs.ro" in repr(c)  # non-secret fields still visible
+    assert "git.example.com" in repr(c)  # non-secret fields still visible
 
 
 def test_config_repr_with_empty_token():
     """Empty token renders as empty masked string, never as 'None' or '***'."""
-    c = fq.Config(host="git.wxs.ro", token="", timeout=5.0)
+    c = fq.Config(host="git.example.com", token="", timeout=5.0)
     r = repr(c)
     assert "SECRET" not in r
     # Empty-token marker: masked is '' (not '***'), so the secret-bearing
@@ -149,7 +150,7 @@ def _runner_dict(rid: int, *, status: str = "idle") -> dict:
 
 
 def _cfg() -> fq.Config:
-    return fq.Config(host="git.wxs.ro", token="testtoken", timeout=5.0)
+    return fq.Config(host="git.example.com", token="testtoken", timeout=5.0)
 
 
 # ---------------------------------------------------------------------------
@@ -163,9 +164,9 @@ def test_fetch_runners_follows_link_header_across_two_pages():
     page1 = [_runner_dict(i) for i in range(1, 31)]    # 30 runners
     page2 = [_runner_dict(i) for i in range(31, 36)]   # 5 runners
     next_link = (
-        '<https://git.wxs.ro/api/v1/admin/actions/runners'
+        '<https://git.example.com/api/v1/admin/actions/runners'
         '?limit=50&page=2>; rel="next", '
-        '<https://git.wxs.ro/api/v1/admin/actions/runners'
+        '<https://git.example.com/api/v1/admin/actions/runners'
         '?limit=50&page=2>; rel="last"'
     )
 
@@ -176,7 +177,7 @@ def test_fetch_runners_follows_link_header_across_two_pages():
         return httpx.Response(200, json=page1, headers={"Link": next_link})
 
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(side_effect=handler)
 
     with fq.Client(_cfg()) as c:
@@ -196,13 +197,13 @@ def test_fetch_runners_refuses_cross_host_next_link():
     verbatim). Audit finding M2. Raise SchemaDrift; never follow.
     """
     evil_link = (
-        '<https://evil.example.com/api/v1/admin/actions/runners?page=2>; '
+        '<https://attacker.test/api/v1/admin/actions/runners?page=2>; '
         'rel="next"'
     )
     page1 = [_runner_dict(i) for i in range(1, 4)]
 
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(return_value=httpx.Response(200, json=page1, headers={"Link": evil_link}))
 
     with fq.Client(_cfg()) as c:
@@ -216,13 +217,13 @@ def test_fetch_runners_refuses_http_downgrade_next_link():
     base would also leak the bearer token. Refuse.
     """
     downgrade_link = (
-        '<http://git.wxs.ro/api/v1/admin/actions/runners?page=2>; '
+        '<http://git.example.com/api/v1/admin/actions/runners?page=2>; '
         'rel="next"'
     )
     page1 = [_runner_dict(i) for i in range(1, 4)]
 
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(
         return_value=httpx.Response(
             200, json=page1, headers={"Link": downgrade_link}
@@ -239,16 +240,16 @@ def test_fetch_runners_refuses_http_downgrade_next_link():
     [
         # Same host, https -> passes through unchanged.
         (
-            "https://git.wxs.ro/api/v1/admin/actions/runners?page=2",
-            "git.wxs.ro",
+            "https://git.example.com/api/v1/admin/actions/runners?page=2",
+            "git.example.com",
         ),
         # Same host with explicit https:// prefix on Config.host.
         (
-            "https://git.wxs.ro/api/v1/admin/actions/runners?page=2",
-            "https://git.wxs.ro",
+            "https://git.example.com/api/v1/admin/actions/runners?page=2",
+            "https://git.example.com",
         ),
         # Relative URL has no host -> trusted.
-        ("/api/v1/admin/actions/runners?page=2", "git.wxs.ro"),
+        ("/api/v1/admin/actions/runners?page=2", "git.example.com"),
     ],
 )
 def test_enforce_same_host_accepts_valid(next_url, expected_host):
@@ -259,13 +260,13 @@ def test_enforce_same_host_accepts_valid(next_url, expected_host):
     "next_url,expected_host,match",
     [
         (
-            "https://evil.example.com/api/v1/x",
-            "git.wxs.ro",
+            "https://attacker.test/api/v1/x",
+            "git.example.com",
             "cross-host",
         ),
         (
-            "http://git.wxs.ro/api/v1/x",
-            "git.wxs.ro",
+            "http://git.example.com/api/v1/x",
+            "git.example.com",
             "non-https",
         ),
     ],
@@ -285,7 +286,7 @@ def test_fetch_runners_dedupes_runaway_link_loop():
     overlap = [_runner_dict(1), _runner_dict(2), _runner_dict(3)]
     page2 = [_runner_dict(3)]  # duplicate of last item from page1
     next_link = (
-        '<https://git.wxs.ro/api/v1/admin/actions/runners'
+        '<https://git.example.com/api/v1/admin/actions/runners'
         '?limit=50&page=2>; rel="next"'
     )
 
@@ -295,7 +296,7 @@ def test_fetch_runners_dedupes_runaway_link_loop():
         return httpx.Response(200, json=overlap, headers={"Link": next_link})
 
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(side_effect=handler)
 
     with fq.Client(_cfg()) as c:
@@ -315,7 +316,7 @@ def test_fetch_runners_passes_page_1_explicitly():
         return httpx.Response(200, json=[_runner_dict(1)])
 
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(side_effect=handler)
 
     with fq.Client(_cfg()) as c:
@@ -329,7 +330,7 @@ def test_fetch_runners_single_page_no_link_header():
     """No Link header -> single fetch, no follow-up."""
     page = [_runner_dict(i) for i in range(1, 4)]  # 3 runners (live shape)
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(return_value=httpx.Response(200, json=page))
 
     with fq.Client(_cfg()) as c:
@@ -372,7 +373,7 @@ def test_fetch_jobs_parses_live_shape():
         },
     ]
     respx.get(
-        "https://git.wxs.ro/api/v1/admin/actions/runners/jobs"
+        "https://git.example.com/api/v1/admin/actions/runners/jobs"
     ).mock(return_value=httpx.Response(200, json=body))
 
     with fq.Client(_cfg()) as c:
@@ -387,15 +388,15 @@ def test_fetch_jobs_parses_live_shape():
 
 @respx.mock
 def test_fetch_jobs_treats_null_payload_as_empty_list():
-    """Forgejo v15.0.2 quirk (verified live against git.wxs.ro on
-    2026-05-28 during M6 live acceptance): when the live queue is
+    """Forgejo v15.0.2 quirk (verified live, 2026-05-28 during M6 live
+    acceptance): when the live queue is
     empty, `/api/v1/admin/actions/runners/jobs` returns the bare JSON
     literal `null` rather than `[]`. The client MUST treat that as
     the empty list, not raise SchemaDrift. M6 carry-over per PRD #61
     line 165.
     """
     respx.get(
-        "https://git.wxs.ro/api/v1/admin/actions/runners/jobs"
+        "https://git.example.com/api/v1/admin/actions/runners/jobs"
     ).mock(return_value=httpx.Response(200, text="null"))
 
     with fq.Client(_cfg()) as c:
@@ -412,10 +413,10 @@ def test_fetch_jobs_null_payload_aggregates_to_empty_snapshot_exit_zero():
     not regress to SchemaDrift on the empty live case.
     """
     respx.get(
-        "https://git.wxs.ro/api/v1/admin/actions/runners/jobs"
+        "https://git.example.com/api/v1/admin/actions/runners/jobs"
     ).mock(return_value=httpx.Response(200, text="null"))
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(return_value=httpx.Response(200, json=[]))
 
     from datetime import datetime, timezone
@@ -424,7 +425,7 @@ def test_fetch_jobs_null_payload_aggregates_to_empty_snapshot_exit_zero():
         runners = c.fetch_runners()
         jobs = c.fetch_jobs()
     snap = fq.aggregate(
-        runners=runners, jobs=jobs, repo_names={}, now=now, host="git.wxs.ro"
+        runners=runners, jobs=jobs, repo_names={}, now=now, host="git.example.com"
     )
     assert snap.queue == ()
     assert snap.totals.running == 0
@@ -461,7 +462,7 @@ def test_fetch_jobs_tolerates_missing_optional_fields():
         },
     ]
     respx.get(
-        "https://git.wxs.ro/api/v1/admin/actions/runners/jobs"
+        "https://git.example.com/api/v1/admin/actions/runners/jobs"
     ).mock(return_value=httpx.Response(200, json=body))
 
     with fq.Client(_cfg()) as c:
@@ -478,7 +479,7 @@ def test_fetch_jobs_tolerates_missing_optional_fields():
 @respx.mock
 def test_resolve_repo_404_returns_fallback_label():
     respx.get(
-        "https://git.wxs.ro/api/v1/repositories/999"
+        "https://git.example.com/api/v1/repositories/999"
     ).mock(return_value=httpx.Response(404, json={"message": "not found"}))
 
     with fq.Client(_cfg()) as c:
@@ -489,7 +490,7 @@ def test_resolve_repo_404_returns_fallback_label():
 @respx.mock
 def test_resolve_repo_403_returns_fallback_label():
     respx.get(
-        "https://git.wxs.ro/api/v1/repositories/777"
+        "https://git.example.com/api/v1/repositories/777"
     ).mock(return_value=httpx.Response(403, json={"message": "forbidden"}))
 
     with fq.Client(_cfg()) as c:
@@ -500,7 +501,7 @@ def test_resolve_repo_403_returns_fallback_label():
 @respx.mock
 def test_resolve_repo_timeout_returns_fallback_label():
     respx.get(
-        "https://git.wxs.ro/api/v1/repositories/555"
+        "https://git.example.com/api/v1/repositories/555"
     ).mock(side_effect=httpx.TimeoutException("slow"))
 
     with fq.Client(_cfg()) as c:
@@ -511,7 +512,7 @@ def test_resolve_repo_timeout_returns_fallback_label():
 @respx.mock
 def test_resolve_repo_success_returns_full_name_and_caches():
     route = respx.get(
-        "https://git.wxs.ro/api/v1/repositories/589"
+        "https://git.example.com/api/v1/repositories/589"
     ).mock(
         return_value=httpx.Response(
             200, json={"id": 589, "full_name": "owner-a/repo-a"}
@@ -533,7 +534,7 @@ def test_resolve_repo_success_returns_full_name_and_caches():
 @respx.mock
 def test_runners_401_raises_auth_error():
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(return_value=httpx.Response(401, json={"message": "nope"}))
     with fq.Client(_cfg()) as c:
         with pytest.raises(fq.AuthError):
@@ -543,7 +544,7 @@ def test_runners_401_raises_auth_error():
 @respx.mock
 def test_runners_403_raises_auth_error():
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(return_value=httpx.Response(403, json={"message": "needs admin"}))
     with fq.Client(_cfg()) as c:
         with pytest.raises(fq.AuthError):
@@ -553,7 +554,7 @@ def test_runners_403_raises_auth_error():
 @respx.mock
 def test_runners_500_raises_connection_error():
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(return_value=httpx.Response(503, text="upstream"))
     with fq.Client(_cfg()) as c:
         with pytest.raises(fq.ConnectionError):
@@ -563,7 +564,7 @@ def test_runners_500_raises_connection_error():
 @respx.mock
 def test_runners_429_raises_connection_error():
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(return_value=httpx.Response(429, text="slow down"))
     with fq.Client(_cfg()) as c:
         with pytest.raises(fq.ConnectionError):
@@ -573,7 +574,7 @@ def test_runners_429_raises_connection_error():
 @respx.mock
 def test_runners_timeout_raises_connection_error():
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(side_effect=httpx.TimeoutException("slow"))
     with fq.Client(_cfg()) as c:
         with pytest.raises(fq.ConnectionError):
@@ -589,7 +590,7 @@ def test_runners_connection_refused_raises_connection_error():
     treats it as transient and M6 CLI exits 4.
     """
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(side_effect=httpx.ConnectError("Connection refused"))
     with fq.Client(_cfg()) as c:
         with pytest.raises(fq.ConnectionError):
@@ -611,7 +612,7 @@ def test_fetch_runners_pagination_exact_page_size_multiple():
     """
     page1 = [_runner_dict(i) for i in range(1, 51)]  # 50 runners
     next_link = (
-        '<https://git.wxs.ro/api/v1/admin/actions/runners'
+        '<https://git.example.com/api/v1/admin/actions/runners'
         '?limit=50&page=2>; rel="next"'
     )
 
@@ -621,7 +622,7 @@ def test_fetch_runners_pagination_exact_page_size_multiple():
         return httpx.Response(200, json=page1, headers={"Link": next_link})
 
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(side_effect=handler)
 
     with fq.Client(_cfg()) as c:
@@ -639,7 +640,7 @@ def test_fetch_runners_pagination_one_over_page_size():
     page1 = [_runner_dict(i) for i in range(1, 51)]  # 50 runners
     page2 = [_runner_dict(51)]                       # 1 runner
     next_link = (
-        '<https://git.wxs.ro/api/v1/admin/actions/runners'
+        '<https://git.example.com/api/v1/admin/actions/runners'
         '?limit=50&page=2>; rel="next"'
     )
 
@@ -649,7 +650,7 @@ def test_fetch_runners_pagination_one_over_page_size():
         return httpx.Response(200, json=page1, headers={"Link": next_link})
 
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(side_effect=handler)
 
     with fq.Client(_cfg()) as c:
@@ -677,7 +678,7 @@ def test_fetch_runners_tolerates_missing_optional_fields():
         {"id": 102, "name": "anon", "labels": ["grunt"]},
     ]
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(return_value=httpx.Response(200, json=body))
 
     with fq.Client(_cfg()) as c:
@@ -707,7 +708,7 @@ def test_fetch_runners_unexpected_status_string_does_not_crash():
         }
     ]
     respx.get(
-        url__regex=r"https://git\.wxs\.ro/api/v1/admin/actions/runners.*"
+        url__regex=r"https://git\.example\.com/api/v1/admin/actions/runners.*"
     ).mock(return_value=httpx.Response(200, json=body))
 
     with fq.Client(_cfg()) as c:
@@ -748,7 +749,7 @@ def test_parse_next_link(header, expected):
 # no Authorization header is ever sent.
 # ---------------------------------------------------------------------------
 
-METRICS_URL = "https://prometheus.wxs.ro"
+METRICS_URL = "https://prometheus.example.com"
 
 
 def _prom_fixture() -> dict:
@@ -785,19 +786,19 @@ def test_fetch_runner_pods_joins_three_queries_by_pod():
     attached from kube_pod_info. Sorted by pod name.
     """
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(side_effect=_prom_handler(_prom_fixture()))
 
     pods, error = fq.fetch_runner_pods(METRICS_URL)
     assert error is None
     assert len(pods) == 3
     by_pod = {p.pod: p for p in pods}
-    qf = by_pod["forgejo-runner-54746685ff-qf4k7"]
+    qf = by_pod["ci-runner-aaaa1111ff-pod1"]
     assert isinstance(qf.cpu_cores, float)
     assert isinstance(qf.memory_bytes, int)
     assert qf.cpu_cores == pytest.approx(0.00109)
     assert qf.memory_bytes == 763322368
-    assert qf.node == "k8s-green-wn2"
+    assert qf.node == "node-a-1"
     # Memory limit IS set (~17.4 GiB); CPU limit is NOT (None).
     assert qf.memory_limit_bytes == 18674094196
     assert qf.cpu_limit_cores is None
@@ -812,7 +813,7 @@ def test_fetch_runner_pods_memory_limit_present_cpu_limit_absent():
     all (the cpu-limit query returns an empty vector).
     """
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(side_effect=_prom_handler(_prom_fixture()))
 
     pods, error = fq.fetch_runner_pods(METRICS_URL)
@@ -834,24 +835,24 @@ def test_fetch_runner_pods_limit_present_for_cpu_when_set():
             "resultType": "vector",
             "result": [
                 {
-                    "metric": {"pod": "forgejo-runner-54746685ff-qf4k7"},
+                    "metric": {"pod": "ci-runner-aaaa1111ff-pod1"},
                     "value": [1780052001.832, "0.5"],
                 }
             ],
         },
     }
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(side_effect=_prom_handler(fixture))
 
     pods, error = fq.fetch_runner_pods(METRICS_URL)
     assert error is None
     by_pod = {p.pod: p for p in pods}
-    qf = by_pod["forgejo-runner-54746685ff-qf4k7"]
+    qf = by_pod["ci-runner-aaaa1111ff-pod1"]
     assert qf.cpu_limit_cores == pytest.approx(0.5)
     assert isinstance(qf.cpu_limit_cores, float)
     # Pods absent from the cpu-limit query keep None.
-    assert by_pod["forgejo-runner-54746685ff-b5f9b"].cpu_limit_cores is None
+    assert by_pod["ci-runner-aaaa1111ff-pod3"].cpu_limit_cores is None
 
 
 @respx.mock
@@ -860,19 +861,19 @@ def test_fetch_runner_pods_pod_missing_from_memory_limit_query_is_none():
     memory_limit_bytes == None (the join is left-outer on the usage pods).
     """
     fixture = _prom_fixture()
-    # Drop the last pod (b5f9b) from the memory-limit result.
+    # Drop the last pod (pod3) from the memory-limit result.
     fixture["memory_limit"]["data"]["result"] = (
         fixture["memory_limit"]["data"]["result"][:2]
     )
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(side_effect=_prom_handler(fixture))
 
     pods, error = fq.fetch_runner_pods(METRICS_URL)
     assert error is None
     by_pod = {p.pod: p for p in pods}
-    assert by_pod["forgejo-runner-54746685ff-qf4k7"].memory_limit_bytes == 18674094196
-    assert by_pod["forgejo-runner-54746685ff-b5f9b"].memory_limit_bytes is None
+    assert by_pod["ci-runner-aaaa1111ff-pod1"].memory_limit_bytes == 18674094196
+    assert by_pod["ci-runner-aaaa1111ff-pod3"].memory_limit_bytes is None
 
 
 @respx.mock
@@ -888,7 +889,7 @@ def test_fetch_runner_pods_no_auth_header_sent_to_prometheus():
         return _prom_handler(_prom_fixture())(request)
 
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(side_effect=handler)
 
     fq.fetch_runner_pods(METRICS_URL)
@@ -897,46 +898,48 @@ def test_fetch_runner_pods_no_auth_header_sent_to_prometheus():
 
 
 @respx.mock
-def test_fetch_runner_pods_cluster_green_filters_by_node_prefix():
-    """--metrics-cluster green keeps only pods on k8s-green-* nodes."""
+def test_fetch_runner_pods_node_prefix_green_filters_pods():
+    """node_prefix='node-a-' keeps only pods on nodes matching that prefix."""
     fixture = _prom_fixture()
-    # Repoint one pod onto a blue node so the filter has something to drop.
-    fixture["info"]["data"]["result"][2]["metric"]["node"] = "k8s-blue-wn3"
+    # Repoint one pod onto a node that does NOT start with node-a-.
+    fixture["info"]["data"]["result"][2]["metric"]["node"] = "node-b-1"
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(side_effect=_prom_handler(fixture))
 
-    green, gerr = fq.fetch_runner_pods(METRICS_URL, cluster="green")
+    green, gerr = fq.fetch_runner_pods(METRICS_URL, node_prefix="node-a-")
     assert gerr is None
     assert {p.pod for p in green} == {
-        "forgejo-runner-54746685ff-qf4k7",
-        "forgejo-runner-54746685ff-k2qss",
+        "ci-runner-aaaa1111ff-pod1",
+        "ci-runner-aaaa1111ff-pod2",
     }
-    assert all(p.node.startswith("k8s-green-") for p in green)
+    assert all(p.node.startswith("node-a-") for p in green)
 
 
 @respx.mock
-def test_fetch_runner_pods_cluster_blue_filters_by_node_prefix():
+def test_fetch_runner_pods_node_prefix_blue_filters_pods():
+    """node_prefix='node-b-' keeps only pods on nodes starting with that prefix."""
     fixture = _prom_fixture()
-    fixture["info"]["data"]["result"][2]["metric"]["node"] = "k8s-blue-wn3"
+    fixture["info"]["data"]["result"][2]["metric"]["node"] = "node-b-1"
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(side_effect=_prom_handler(fixture))
 
-    blue, berr = fq.fetch_runner_pods(METRICS_URL, cluster="blue")
+    blue, berr = fq.fetch_runner_pods(METRICS_URL, node_prefix="node-b-")
     assert berr is None
-    assert {p.pod for p in blue} == {"forgejo-runner-54746685ff-b5f9b"}
+    assert {p.pod for p in blue} == {"ci-runner-aaaa1111ff-pod3"}
 
 
 @respx.mock
-def test_fetch_runner_pods_auto_applies_no_filter():
+def test_fetch_runner_pods_empty_node_prefix_applies_no_filter():
+    """Empty node_prefix (the default) keeps all pods."""
     fixture = _prom_fixture()
-    fixture["info"]["data"]["result"][2]["metric"]["node"] = "k8s-blue-wn3"
+    fixture["info"]["data"]["result"][2]["metric"]["node"] = "node-b-1"
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(side_effect=_prom_handler(fixture))
 
-    pods, error = fq.fetch_runner_pods(METRICS_URL, cluster="auto")
+    pods, error = fq.fetch_runner_pods(METRICS_URL, node_prefix="")
     assert error is None
     assert len(pods) == 3
 
@@ -951,7 +954,7 @@ def test_fetch_runner_pods_passes_namespace_into_queries():
         return _prom_handler(_prom_fixture())(request)
 
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(side_effect=handler)
 
     fq.fetch_runner_pods(METRICS_URL, namespace="ci-runners")
@@ -962,7 +965,7 @@ def test_fetch_runner_pods_passes_namespace_into_queries():
 @respx.mock
 def test_fetch_runner_pods_http_500_is_graceful():
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(return_value=httpx.Response(500, text="boom"))
     pods, error = fq.fetch_runner_pods(METRICS_URL)
     assert pods == ()
@@ -972,7 +975,7 @@ def test_fetch_runner_pods_http_500_is_graceful():
 @respx.mock
 def test_fetch_runner_pods_timeout_is_graceful():
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(side_effect=httpx.TimeoutException("slow"))
     pods, error = fq.fetch_runner_pods(METRICS_URL)
     assert pods == ()
@@ -982,7 +985,7 @@ def test_fetch_runner_pods_timeout_is_graceful():
 @respx.mock
 def test_fetch_runner_pods_connection_refused_is_graceful():
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(side_effect=httpx.ConnectError("refused"))
     pods, error = fq.fetch_runner_pods(METRICS_URL)
     assert pods == ()
@@ -992,7 +995,7 @@ def test_fetch_runner_pods_connection_refused_is_graceful():
 @respx.mock
 def test_fetch_runner_pods_malformed_body_is_graceful():
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(return_value=httpx.Response(200, text="not json{{"))
     pods, error = fq.fetch_runner_pods(METRICS_URL)
     assert pods == ()
@@ -1002,7 +1005,7 @@ def test_fetch_runner_pods_malformed_body_is_graceful():
 @respx.mock
 def test_fetch_runner_pods_status_not_success_is_graceful():
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(
         return_value=httpx.Response(
             200, json={"status": "error", "errorType": "bad_data"}
@@ -1020,7 +1023,7 @@ def test_fetch_runner_pods_empty_vectors_returns_no_pods_no_error():
     """
     empty = {"status": "success", "data": {"resultType": "vector", "result": []}}
     respx.get(
-        url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*"
+        url__regex=r"https://prometheus\.example\.com/api/v1/query.*"
     ).mock(return_value=httpx.Response(200, json=empty))
     pods, error = fq.fetch_runner_pods(METRICS_URL)
     assert pods == ()
@@ -1075,7 +1078,7 @@ def test_fetch_ncps_status_active_from_fixture():
             return httpx.Response(200, json=fixture["ncps_bytes"])
         return httpx.Response(400, text="unexpected")
 
-    respx.get(url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*").mock(
+    respx.get(url__regex=r"https://prometheus\.example\.com/api/v1/query.*").mock(
         side_effect=handler
     )
     n = fq.fetch_ncps_status(METRICS_URL)
@@ -1090,7 +1093,7 @@ def test_fetch_ncps_status_active_from_fixture():
 @respx.mock
 def test_fetch_ncps_status_active_when_only_inflight_nonzero():
     """req/s == 0 but inflight > 0 -> active."""
-    respx.get(url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*").mock(
+    respx.get(url__regex=r"https://prometheus\.example\.com/api/v1/query.*").mock(
         side_effect=_ncps_handler(req=0, inflight=2, upstream=0, bytes_=0)
     )
     n = fq.fetch_ncps_status(METRICS_URL)
@@ -1104,7 +1107,7 @@ def test_fetch_ncps_status_active_when_only_requests_nonzero():
     `req > 0 or inflight > 0` OR (the fixture active sample has BOTH nonzero,
     so on its own it can't prove the request arm flips active independently).
     """
-    respx.get(url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*").mock(
+    respx.get(url__regex=r"https://prometheus\.example\.com/api/v1/query.*").mock(
         side_effect=_ncps_handler(req=5.0, inflight=0, upstream=0, bytes_=0)
     )
     n = fq.fetch_ncps_status(METRICS_URL)
@@ -1114,7 +1117,7 @@ def test_fetch_ncps_status_active_when_only_requests_nonzero():
 
 @respx.mock
 def test_fetch_ncps_status_idle_when_both_zero():
-    respx.get(url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*").mock(
+    respx.get(url__regex=r"https://prometheus\.example\.com/api/v1/query.*").mock(
         side_effect=_ncps_handler(req=0, inflight=0, upstream=0, bytes_=0)
     )
     n = fq.fetch_ncps_status(METRICS_URL)
@@ -1126,7 +1129,7 @@ def test_fetch_ncps_status_missing_metric_treated_as_zero():
     """An empty result vector (metric not scraped yet) -> 0.0, not an
     error. With all-empty the status is idle.
     """
-    respx.get(url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*").mock(
+    respx.get(url__regex=r"https://prometheus\.example\.com/api/v1/query.*").mock(
         side_effect=_ncps_handler(req=None, inflight=None, upstream=None, bytes_=None)
     )
     n = fq.fetch_ncps_status(METRICS_URL)
@@ -1139,7 +1142,7 @@ def test_fetch_ncps_status_missing_metric_treated_as_zero():
 @respx.mock
 def test_fetch_ncps_status_nan_treated_as_zero():
     """Prometheus emits "NaN" for an empty rate window -> 0.0."""
-    respx.get(url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*").mock(
+    respx.get(url__regex=r"https://prometheus\.example\.com/api/v1/query.*").mock(
         side_effect=_ncps_handler(req="NaN", inflight=0, upstream="NaN", bytes_="NaN")
     )
     n = fq.fetch_ncps_status(METRICS_URL)
@@ -1149,7 +1152,7 @@ def test_fetch_ncps_status_nan_treated_as_zero():
 
 @respx.mock
 def test_fetch_ncps_status_http_error_returns_none():
-    respx.get(url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*").mock(
+    respx.get(url__regex=r"https://prometheus\.example\.com/api/v1/query.*").mock(
         return_value=httpx.Response(500, text="boom")
     )
     assert fq.fetch_ncps_status(METRICS_URL) is None
@@ -1157,7 +1160,7 @@ def test_fetch_ncps_status_http_error_returns_none():
 
 @respx.mock
 def test_fetch_ncps_status_timeout_returns_none():
-    respx.get(url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*").mock(
+    respx.get(url__regex=r"https://prometheus\.example\.com/api/v1/query.*").mock(
         side_effect=httpx.TimeoutException("slow")
     )
     assert fq.fetch_ncps_status(METRICS_URL) is None
@@ -1165,7 +1168,7 @@ def test_fetch_ncps_status_timeout_returns_none():
 
 @respx.mock
 def test_fetch_ncps_status_malformed_body_returns_none():
-    respx.get(url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*").mock(
+    respx.get(url__regex=r"https://prometheus\.example\.com/api/v1/query.*").mock(
         return_value=httpx.Response(200, text="not json{{")
     )
     assert fq.fetch_ncps_status(METRICS_URL) is None
@@ -1180,7 +1183,7 @@ def test_fetch_ncps_status_no_auth_header_sent():
         seen.append(request.headers.get("authorization"))
         return _scalar_response(0)
 
-    respx.get(url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*").mock(
+    respx.get(url__regex=r"https://prometheus\.example\.com/api/v1/query.*").mock(
         side_effect=handler
     )
     fq.fetch_ncps_status(METRICS_URL)
@@ -1198,7 +1201,7 @@ def test_fetch_ncps_status_interpolates_rate_window():
         captured.append(request.url.params.get("query", ""))
         return _scalar_response(0)
 
-    respx.get(url__regex=r"https://prometheus\.wxs\.ro/api/v1/query.*").mock(
+    respx.get(url__regex=r"https://prometheus\.example\.com/api/v1/query.*").mock(
         side_effect=handler
     )
     fq.fetch_ncps_status(METRICS_URL)

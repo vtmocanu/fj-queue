@@ -35,12 +35,13 @@ the argparse CLI (M6) build on top of the Snapshot returned by aggregate().
 All Forgejo field-name knowledge lives in the client layer and is mapped
 to stable internal names on the frozen dataclasses below.
 
-PRD path: /Users/vmocanu/stuff/gitrepos/wxs/wxs/ai-tasks/prds/61-fj-queue.md
+# See https://github.com/vtmocanu/fj-queue/issues/2
 """
 
 from __future__ import annotations
 
 import os
+import tomllib
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Iterable, Literal, Mapping
@@ -68,7 +69,7 @@ EXIT_INTERRUPTED = 130
 # Tool version (distinct from the JSON schema_version). Surfaced by
 # `--version`. v1.0.0 = the first complete implementation of the PRD #61
 # v1 contract.
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 
 # ---------------------------------------------------------------------------
@@ -127,19 +128,30 @@ class SchemaDrift(FjQueueError):
 
 @dataclass(frozen=True)
 class Config:
-    host: str = "git.wxs.ro"
+    # host has no built-in default; it is always set by resolve_host()
+    # before Config is constructed. The empty string here is a neutral
+    # sentinel so the dataclass field is valid; the CLI never lets it
+    # reach the HTTP layer as "".
+    host: str = ""
     token: str = ""
     timeout: float = 10.0
-    # Per-pod runner CPU/memory metrics (Prometheus). Always-on with
-    # graceful degradation; --no-metrics flips `metrics_enabled` off.
+    # Per-pod runner CPU/memory metrics (Prometheus). Default OFF
+    # (opt in via --metrics or config file `[metrics] enabled = true`).
     # The metrics source is Prometheus, a SEPARATE endpoint from the
     # Forgejo host with NO auth (see fetch_runner_pods); these fields
     # never carry the Forgejo token.
-    metrics_enabled: bool = True
-    metrics_url: str = "https://prometheus.wxs.ro"
-    metrics_namespace: str = "forgejo-runner"
+    metrics_enabled: bool = False
+    metrics_url: str = ""
+    metrics_namespace: str = "ci-runners"
     metrics_timeout: float = 3.0
-    metrics_cluster: str = "auto"
+    # Free-form node-name prefix for filtering runner pods (e.g.
+    # "k8s-node-"). Empty string = no filter (keep all pods). Replaces
+    # the old hard-coded blue/green enum (M2 generalization).
+    metrics_node_prefix: str = ""
+    # NCPS (nix cache proxy) cache-status feature. Default OFF; opt in
+    # via --ncps or config `[ncps] enabled = true`. Fully independent of
+    # metrics_enabled: NCPS can be on while metrics are off and vice versa.
+    ncps_enabled: bool = False
 
     @property
     def base_url(self) -> str:
@@ -191,20 +203,22 @@ def resolve_token(
     )
 
 
-# Default Prometheus base URL for the runner CPU/memory metrics. NO auth;
-# reachable from the laptop. Overridable via --metrics-url or the
-# FJ_QUEUE_METRICS_URL env var (mirrors the FORGEJO_TOKEN env pattern).
-_DEFAULT_METRICS_URL = "https://prometheus.wxs.ro"
+# Empty default: no private URL ships in the binary. The caller (main())
+# validates that a non-empty URL is present when metrics or NCPS is enabled.
+# Overridable via --metrics-url or $FJ_QUEUE_METRICS_URL or config [metrics] url.
+_DEFAULT_METRICS_URL = ""
 
 
 def resolve_metrics_url(
     arg_url: str | None = None,
     env: Mapping[str, str] | None = None,
+    config_value: str = "",
 ) -> str:
     """Return the Prometheus base URL to use.
 
-    Precedence: --metrics-url arg > $FJ_QUEUE_METRICS_URL env > default.
-    Unlike resolve_token there is no error case: a default always exists.
+    Precedence: --metrics-url arg > $FJ_QUEUE_METRICS_URL env >
+    config [metrics] url > "" (empty; caller must validate when
+    metrics/NCPS is enabled).
     """
     if env is None:
         env = os.environ
@@ -213,7 +227,129 @@ def resolve_metrics_url(
     from_env = env.get("FJ_QUEUE_METRICS_URL", "")
     if from_env:
         return from_env
+    if config_value:
+        return config_value
     return _DEFAULT_METRICS_URL
+
+
+# ---------------------------------------------------------------------------
+# Host resolution.
+#
+# Precedence (mirrors resolve_token):
+#   1. --host arg
+#   2. $FORGEJO_HOST env
+#   3. config file `host` key
+#   (no private built-in default -- the tool must always be told which
+#    host to contact; silently defaulting to the maintainer's instance
+#    would be a bad surprise for external users)
+# ---------------------------------------------------------------------------
+
+
+def resolve_host(
+    arg_host: str | None = None,
+    env: Mapping[str, str] | None = None,
+    config_value: str | None = None,
+) -> str:
+    """Return the Forgejo host to use.
+
+    Precedence (highest wins): --host flag > $FORGEJO_HOST env >
+    config file `host` value. If none resolves to a non-empty string,
+    raises ConfigError with guidance pointing at all three sources.
+
+    Unlike resolve_token there is no secret concern; the host is just a
+    hostname string and may appear in log output.
+    """
+    if env is None:
+        env = os.environ
+    if arg_host:
+        return arg_host
+    from_env = env.get("FORGEJO_HOST", "")
+    if from_env:
+        return from_env
+    if config_value:
+        return config_value
+    raise ConfigError(
+        "no host: pass --host, set $FORGEJO_HOST, "
+        'or add host = "..." to ./fj-queue.toml or '
+        "~/.config/fj-queue/config.toml"
+    )
+
+
+# ---------------------------------------------------------------------------
+# TOML config file loader.
+#
+# Discovery order (first hit wins, per the git-manager convention):
+#   1. --config PATH (explicit; error if the path does not exist)
+#   2. ./fj-queue.toml (cwd)
+#   3. $XDG_CONFIG_HOME/fj-queue/config.toml
+#      (falls back to ~/.config/fj-queue/config.toml when XDG_CONFIG_HOME
+#       is unset or empty)
+#
+# A missing auto-discovered file is NOT an error.
+# The API token is NEVER read from the config file (security).
+# ---------------------------------------------------------------------------
+
+
+def _find_config_file(
+    config_arg: str | None = None,
+    env: Mapping[str, str] | None = None,
+) -> "Path | None":  # lazy string annotation avoids importing Path at module level
+    """Return the Path to the config file, or None if no file is found.
+
+    When `config_arg` is supplied (from --config PATH) and the file
+    does not exist, raises ConfigError so the CLI can report it cleanly.
+    Auto-discovered paths that are absent are silently skipped.
+    """
+    from pathlib import Path  # _Path alias only defined later in this module
+
+    if env is None:
+        env = os.environ
+    if config_arg is not None:
+        p = Path(config_arg)
+        if not p.exists():
+            raise ConfigError(f"config file not found: {config_arg}")
+        return p
+    # cwd probe
+    cwd_config = Path.cwd() / "fj-queue.toml"
+    if cwd_config.exists():
+        return cwd_config
+    # XDG / home
+    xdg_home = env.get("XDG_CONFIG_HOME", "").strip()
+    if xdg_home:
+        xdg_config = Path(xdg_home) / "fj-queue" / "config.toml"
+    else:
+        xdg_config = Path.home() / ".config" / "fj-queue" / "config.toml"
+    if xdg_config.exists():
+        return xdg_config
+    return None
+
+
+def load_file_config(
+    config_arg: str | None = None,
+    env: Mapping[str, str] | None = None,
+) -> dict:
+    """Parse the TOML config file and return its contents as a dict.
+
+    Returns an empty dict if no config file is discovered.
+    Raises ConfigError for:
+      - an explicit --config path that does not exist
+      - a TOML parse error in any discovered file
+
+    Security: the `token` key is silently dropped from any loaded config.
+    The API token must only come from --token / $FORGEJO_TOKEN.
+    """
+    path = _find_config_file(config_arg, env)
+    if path is None:
+        return {}
+    try:
+        with open(path, "rb") as fh:
+            data = tomllib.load(fh)
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"malformed config file {path}: {exc}") from exc
+    # Security: never source the token from a config file.
+    if "token" in data:
+        data.pop("token")
+    return data
 
 
 # ---------------------------------------------------------------------------
@@ -325,7 +461,7 @@ def _normalize_job(raw: dict) -> RawJob:
 
 # ---------------------------------------------------------------------------
 # Link-header parsing (RFC 5988). Forgejo emits absolute URLs like
-#   Link: <https://git.wxs.ro/api/v1/admin/actions/runners?limit=50&page=2>; rel="next",
+#   Link: <https://git.example.com/api/v1/admin/actions/runners?limit=50&page=2>; rel="next",
 #         <https://...?page=2>; rel="last"
 # We just need the `rel="next"` URL.
 # ---------------------------------------------------------------------------
@@ -563,8 +699,7 @@ class Client:
             body = r.json()
         except ValueError as e:
             raise SchemaDrift(f"non-JSON jobs response: {e}") from e
-        # Forgejo v15.0.2 quirk (verified live against git.wxs.ro on
-        # 2026-05-28): when the live queue is empty, the endpoint returns
+        # Forgejo v15.0.2 quirk: when the live queue is empty, the endpoint returns
         # the bare JSON literal `null` rather than `[]`. Treat it as the
         # empty list per the wire contract, NOT as a schema break.
         if body is None:
@@ -624,7 +759,13 @@ class Client:
 
 
 def _default_config() -> Config:
-    return Config(token=resolve_token())
+    """Build a minimal Config from the environment for module-API callers.
+
+    Resolves token via resolve_token() and host via resolve_host() so that
+    missing values raise the same actionable ConfigError the CLI gives,
+    rather than producing an opaque httpx error at the HTTP layer.
+    """
+    return Config(token=resolve_token(), host=resolve_host())
 
 
 def fetch_runners(config: Config | None = None) -> list[Runner]:
@@ -654,7 +795,7 @@ def resolve_repo(repo_id: int, config: Config | None = None) -> str:
 # Prometheus metrics client (per-pod runner CPU/memory).
 #
 # DELIBERATELY ISOLATED from the Forgejo `Client` above: a separate httpx
-# client, a different base URL (prometheus.wxs.ro), and NO Authorization
+# client, a different base URL (user-supplied via --metrics-url / config), and NO Authorization
 # header. The Forgejo admin token must NEVER reach Prometheus. This layer
 # owns all Prometheus URL-path + PromQL knowledge and maps the HTTP API's
 # instant-vector response into typed `PodResource` rows.
@@ -669,7 +810,7 @@ def resolve_repo(repo_id: int, config: Config | None = None) -> str:
 # malformed body, bad URL) returns `((), error_string)` and NEVER raises,
 # so the dashboard still renders with an "unavailable" line.
 #
-# Verified PromQL (live against prometheus.wxs.ro, 2026-05-29):
+# Verified PromQL:
 #   1. CPU cores per pod (combines the `runner` + `dind` containers):
 #      sum by (pod) (rate(container_cpu_usage_seconds_total
 #        {namespace="<ns>", container!=""}[5m]))
@@ -679,10 +820,9 @@ def resolve_repo(repo_id: int, config: Config | None = None) -> str:
 #   3. pod -> node map (read the `node` label off each series):
 #      kube_pod_info{namespace="<ns>"}
 # Join the three by `pod`. cpu_cores = float(value); memory_bytes =
-# int(float(value)). Blue/green: both clusters report cluster="k8s-cc";
-# the live one is told apart by the node prefix (k8s-green-* vs
-# k8s-blue-*). --metrics-cluster green|blue keeps only pods whose node
-# starts with `k8s-<color>-`; `auto` applies no filter.
+# int(float(value)). Optional --node-prefix filters pods to those whose
+# node name starts with the given string (e.g. "k8s-node-"); empty
+# string keeps all pods.
 # ===========================================================================
 
 
@@ -704,6 +844,8 @@ class PodResource:
     """
 
     pod: str
+    # Kubernetes node the pod runs on. Used for optional prefix-based
+    # filtering (--node-prefix / config `[metrics] node_prefix`).
     node: str
     cpu_cores: float
     memory_bytes: int
@@ -714,10 +856,16 @@ class PodResource:
 # Rate window for the CPU query, surfaced in the JSON `metrics.rate_window`.
 _PROM_RATE_WINDOW = "5m"
 
-# Sentinel `metrics.error` value when metrics are turned off via
-# --no-metrics. Distinct from None (a successful fetch with zero pods)
-# so JSON consumers can tell the two apart.
+# Sentinel `metrics.error` value when metrics are off (the default, or
+# explicit --no-metrics). Distinct from None (a successful fetch with
+# zero pods) so JSON consumers can tell the two apart.
 METRICS_DISABLED = "disabled"
+
+# Sentinel `ncps_error` value when NCPS is off (the default, or explicit
+# --no-ncps). Distinct from None (fetch succeeded or "no data") so JSON
+# consumers and renderers can tell "explicitly disabled" apart from a
+# fetch that returned no data.
+NCPS_DISABLED = "disabled"
 
 # PromQL templates. `{ns}` is filled with the metrics namespace; literal
 # PromQL braces are doubled for str.format().
@@ -838,8 +986,8 @@ def _prom_scalar(result: list, default: float = 0.0) -> float:
 def fetch_runner_pods(
     metrics_url: str,
     *,
-    namespace: str = "forgejo-runner",
-    cluster: str = "auto",
+    namespace: str = "ci-runners",
+    node_prefix: str = "",
     timeout: float = 3.0,
     http: httpx.Client | None = None,
 ) -> tuple[tuple[PodResource, ...], str | None]:
@@ -851,9 +999,10 @@ def fetch_runner_pods(
     the whole dashboard.
 
     The three PromQL queries (CPU, memory, pod->node) are joined by pod.
-    With `cluster` in {green, blue}, only pods whose node starts with
-    `k8s-<cluster>-` survive (blue/green disambiguation); `auto` keeps
-    all. Results are sorted by pod name for deterministic output.
+    When `node_prefix` is non-empty, only pods whose node name starts
+    with that string survive (e.g. "k8s-node-" to keep only one cluster
+    in a split). An empty prefix keeps all pods.
+    Results are sorted by pod name for deterministic output.
 
     A dedicated httpx client (no auth header, Prometheus base URL) is
     used so the Forgejo admin token can never leak to Prometheus.
@@ -895,9 +1044,7 @@ def fetch_runner_pods(
         pods: list[PodResource] = []
         for pod in sorted(set(cpu_by_pod) | set(mem_by_pod)):
             node = node_by_pod.get(pod, "")
-            if cluster in ("green", "blue") and not node.startswith(
-                f"k8s-{cluster}-"
-            ):
+            if node_prefix and not node.startswith(node_prefix):
                 continue
             cpu_limit = cpu_limit_by_pod.get(pod)
             mem_limit = mem_limit_by_pod.get(pod)
@@ -928,7 +1075,7 @@ def fetch_runner_pods(
 
 
 # ---------------------------------------------------------------------------
-# NCPS (nix cache proxy, nix-cache.wxs.ro) active/idle status.
+# NCPS (nix cache proxy) active/idle status.
 #
 # Same isolated, no-auth Prometheus client as fetch_runner_pods; same
 # never-raises contract. NCPS exposes a single instance (job="ncps"), so
@@ -1217,12 +1364,15 @@ class Snapshot:
     # failed or metrics are disabled.
     runner_pods: tuple[PodResource, ...] = ()
     metrics_error: str | None = None
-    # NCPS cache activity (nix-cache.wxs.ro), from the same Prometheus
-    # source. None when metrics are disabled or the NCPS fetch failed
-    # (the shared `metrics_error` carries the reason in the common case);
-    # aggregate() passes it through unchanged (the fetch lives in
-    # _do_one_fetch, keeping aggregate pure).
+    # NCPS cache activity (nix cache proxy), from the same Prometheus
+    # source. None when NCPS is disabled (see ncps_error) or the NCPS
+    # fetch returned no data. aggregate() passes it through unchanged
+    # (the fetch lives in _do_one_fetch, keeping aggregate pure).
     ncps: NcpsStatus | None = None
+    # Companion error field for NCPS, parallel to metrics_error.
+    # NCPS_DISABLED when ncps is explicitly off (ncps_enabled=False);
+    # None when the fetch succeeded or there is no NCPS-specific reason.
+    ncps_error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1289,6 +1439,7 @@ def aggregate(
     runner_pods: tuple[PodResource, ...] = (),
     metrics_error: str | None = None,
     ncps: NcpsStatus | None = None,
+    ncps_error: str | None = None,
 ) -> Snapshot:
     """Build the canonical Snapshot from pre-fetched inputs.
 
@@ -1316,7 +1467,9 @@ def aggregate(
       metrics_error: the Prometheus failure reason string, or None on
                    success / when metrics are disabled.
       ncps: NCPS cache status pre-fetched from Prometheus, or None when
-                   metrics are disabled or the NCPS fetch failed.
+                   NCPS is disabled or the NCPS fetch returned no data.
+      ncps_error: NCPS_DISABLED when NCPS is explicitly off; None when
+                   the fetch succeeded or there is no NCPS-specific reason.
     """
     if now.tzinfo is None:
         # Defensive: a naive datetime would emit a non-RFC3339 string in
@@ -1449,6 +1602,7 @@ def aggregate(
         runner_pods=tuple(runner_pods),
         metrics_error=metrics_error,
         ncps=ncps,
+        ncps_error=ncps_error,
     )
 
 
@@ -1641,8 +1795,11 @@ def to_dict(snap: Snapshot) -> dict:
             "rate_window": _PROM_RATE_WINDOW,
         },
         # NCPS cache status (additive v1.x key; raw numbers). null when
-        # metrics are disabled or the NCPS fetch failed.
+        # NCPS is disabled (see ncps_error) or the NCPS fetch failed.
         "ncps": _ncps_to_dict(snap.ncps),
+        # Companion error field for ncps (additive M3 key). "disabled"
+        # when NCPS is explicitly off; null on success or "no data".
+        "ncps_error": snap.ncps_error,
     }
 
 
@@ -1823,19 +1980,24 @@ def _fmt_mem_cell(usage_bytes: int, limit_bytes: int | None, *, dash: str) -> st
 
 def _ncps_summary(snap: "Snapshot") -> tuple[str, str]:
     """(text, kind) for the NCPS status line. kind is one of
-    active/idle/disabled/unavailable, used by the rich renderer to pick a
-    style. Shares the metrics_error path (no second error field): a
-    disabled run is metrics_error == METRICS_DISABLED; a None ncps with no
-    populated reason falls back to "no data".
+    active/idle/disabled/unavailable/no_data, used by the rich renderer to
+    pick a style. Checks snap.ncps_error for the NCPS_DISABLED sentinel
+    (decoupled from metrics_error in M3). Falls back to snap.metrics_error
+    for the unavailable message ONLY when it is a genuine error string
+    (not METRICS_DISABLED), so a metrics-off + ncps-on + no-data snapshot
+    reads as "no data" rather than the misleading "unavailable (disabled)".
     """
-    if snap.metrics_error == METRICS_DISABLED:
-        return "disabled (--no-metrics)", "disabled"
+    if snap.ncps_error == NCPS_DISABLED:
+        return "disabled", "disabled"
     if snap.ncps is None:
-        # No status and no failure reason: NCPS just wasn't observed.
-        # Read as "no data", distinct from a real "unavailable (<reason>)".
-        if snap.metrics_error is None:
+        # No NCPS data and not explicitly disabled. Consult metrics_error
+        # for context only when it represents a real shared-endpoint failure
+        # (not the METRICS_DISABLED sentinel, which would mislead users into
+        # thinking NCPS itself is disabled).
+        error = snap.metrics_error
+        if error is None or error == METRICS_DISABLED:
             return "no data", "no_data"
-        return f"unavailable ({snap.metrics_error})", "unavailable"
+        return f"unavailable ({error})", "unavailable"
     n = snap.ncps
     if n.active:
         return (
@@ -1894,8 +2056,8 @@ def render_plain(snap: "Snapshot") -> str:
 
     # Runner resources (per pod, from Prometheus). Combined containers.
     if snap.metrics_error == METRICS_DISABLED:
-        # Intentional toggle, not a failure: read as such.
-        lines.append("RUNNER RESOURCES: disabled (--no-metrics)")
+        # Intentional opt-out (default), not a failure: read as such.
+        lines.append("RUNNER RESOURCES: disabled")
     elif snap.metrics_error is not None:
         lines.append(
             f"RUNNER RESOURCES: unavailable ({snap.metrics_error})"
@@ -2061,9 +2223,9 @@ def render_rich(snap: "Snapshot"):
     # render a dim "unavailable" line instead of a table so the dashboard
     # degrades gracefully rather than showing an empty/blank section.
     if snap.metrics_error == METRICS_DISABLED:
-        # Intentional toggle, not a failure: read as such.
+        # Intentional opt-out (default), not a failure: read as such.
         sections.append(
-            Text("Runner resources: disabled (--no-metrics)", style="dim")
+            Text("Runner resources: disabled", style="dim")
         )
     elif snap.metrics_error is not None:
         sections.append(
@@ -2394,37 +2556,49 @@ def _do_one_fetch(
     repo_names = _resolve_repos_for_jobs(client, jobs)
 
     # Per-pod runner CPU/memory from Prometheus. ISOLATED from the Forgejo
-    # client above (separate httpx client, no auth). Always-on with
-    # graceful degradation: fetch_runner_pods never raises, but the
+    # client above (separate httpx client, no auth). Off by default; opt in
+    # via --metrics or config `[metrics] enabled = true`. When enabled,
+    # degrades gracefully: fetch_runner_pods never raises, but the
     # try/except is belt-and-braces so a Prometheus problem can NEVER
-    # abort a snapshot. Disabled via --no-metrics.
+    # abort a snapshot.
     runner_pods: tuple[PodResource, ...] = ()
     metrics_error: str | None = None
     ncps: NcpsStatus | None = None
+    ncps_error: str | None = None
     if config is not None:
+        # Metrics fetch (independent of NCPS). Off by default; opt in
+        # via --metrics or config `[metrics] enabled = true`.
         if config.metrics_enabled:
             try:
                 runner_pods, metrics_error = fetch_runner_pods(
                     config.metrics_url,
                     namespace=config.metrics_namespace,
-                    cluster=config.metrics_cluster,
+                    node_prefix=config.metrics_node_prefix,
                     timeout=config.metrics_timeout,
                 )
             except Exception as e:  # noqa: BLE001 (never crash on metrics)
                 runner_pods, metrics_error = (), f"metrics fetch failed: {e}"
-            # NCPS status from the same isolated Prometheus client.
-            # Belt-and-braces (fetch_ncps_status already never raises).
+        else:
+            # metrics off (default): mark the section "disabled" so
+            # consumers can tell it apart from a successful fetch that
+            # found zero pods (runner_pods=[] with metrics_error=None).
+            metrics_error = METRICS_DISABLED
+
+        # NCPS fetch. Fully independent of metrics_enabled: gated solely
+        # on config.ncps_enabled. Off by default; opt in via --ncps or
+        # config `[ncps] enabled = true`. Belt-and-braces (fetch_ncps_status
+        # already never raises); the outer try/except is a backstop only.
+        if config.ncps_enabled:
             try:
                 ncps = fetch_ncps_status(
                     config.metrics_url, timeout=config.metrics_timeout
                 )
-            except Exception:  # noqa: BLE001 (never crash on metrics)
+            except Exception:  # noqa: BLE001 (never crash on ncps)
                 ncps = None
         else:
-            # --no-metrics: mark the section "disabled" so consumers can
-            # tell it apart from a successful fetch that found zero pods
-            # (which is runner_pods=[] with metrics_error=None).
-            metrics_error = METRICS_DISABLED
+            # NCPS off: mark with the sentinel so renderers and JSON
+            # consumers can distinguish "disabled" from "no data / failed".
+            ncps_error = NCPS_DISABLED
 
     snap = aggregate(
         runners,
@@ -2437,6 +2611,7 @@ def _do_one_fetch(
         runner_pods=runner_pods,
         metrics_error=metrics_error,
         ncps=ncps,
+        ncps_error=ncps_error,
     )
     return _scope_snapshot_queue(
         snap,
@@ -2655,7 +2830,8 @@ def run_watch(
 # M6 -- CLI ergonomics + packaging (argparse, stdlib only).
 #
 # Wires every layer into a runnable program:
-#   uv run fj_queue.py [--mode {watch,once}|--watch|--once]
+#   uv run fj_queue.py [--config PATH]
+#                      [--mode {watch,once}|--watch|--once]
 #                      [--format {rich,plain,json}]
 #                      [--interval N] [--host H] [--token T] [--timeout S]
 #                      [--label L ...] [--repo owner/repo]
@@ -2733,9 +2909,19 @@ def _build_parser():
         help="watch poll interval in seconds (default: 2.0)",
     )
     parser.add_argument(
+        "--config",
+        default=None,
+        metavar="PATH",
+        help="path to TOML config file (overrides auto-discovery). "
+        "Auto-discovery order: ./fj-queue.toml, "
+        "$XDG_CONFIG_HOME/fj-queue/config.toml, "
+        "~/.config/fj-queue/config.toml.",
+    )
+    parser.add_argument(
         "--host",
-        default="git.wxs.ro",
-        help="Forgejo host (default: git.wxs.ro)",
+        default=None,
+        help="Forgejo host (overrides $FORGEJO_HOST and config file). "
+        "Required unless set via $FORGEJO_HOST or the config file.",
     )
     parser.add_argument(
         "--token",
@@ -2762,34 +2948,70 @@ def _build_parser():
         metavar="OWNER/REPO",
         help="scope to a single repo slug",
     )
-    parser.add_argument(
+    # --metrics / --no-metrics: mutually exclusive opt-in / explicit-off.
+    # Default is None (no flag given -> consult config file, then False).
+    metrics_group = parser.add_mutually_exclusive_group()
+    metrics_group.add_argument(
+        "--metrics",
+        dest="metrics",
+        action="store_const",
+        const=True,
+        default=None,
+        help="enable per-pod runner CPU/memory metrics (Prometheus). "
+        "Off by default; enable in config with [metrics] enabled = true.",
+    )
+    metrics_group.add_argument(
         "--no-metrics",
         dest="metrics",
-        action="store_false",
-        default=True,
-        help="disable per-pod runner CPU/memory metrics (Prometheus). "
-        "Metrics are on by default and degrade gracefully on failure.",
+        action="store_const",
+        const=False,
+        help="explicitly disable per-pod runner CPU/memory metrics "
+        "(overrides config file). Redundant with the default-off behavior "
+        "but kept for backward compatibility and scripting clarity.",
     )
     parser.add_argument(
         "--metrics-url",
         default=None,
         metavar="URL",
         help="Prometheus base URL for runner metrics "
-        "(default: $FJ_QUEUE_METRICS_URL or https://prometheus.wxs.ro)",
+        "(default: $FJ_QUEUE_METRICS_URL or config [metrics] url; "
+        "required when --metrics or --ncps is enabled)",
     )
     parser.add_argument(
         "--metrics-namespace",
-        default="forgejo-runner",
+        default=None,
         metavar="NS",
         help="Kubernetes namespace of the runner pods "
-        "(default: forgejo-runner)",
+        "(default: config [metrics] namespace or 'ci-runners')",
     )
     parser.add_argument(
-        "--metrics-cluster",
-        choices=["auto", "green", "blue"],
-        default="auto",
-        help="filter runner pods by node color prefix for blue/green "
-        "(default: auto = no filter)",
+        "--node-prefix",
+        default=None,
+        metavar="PREFIX",
+        help="filter runner pods by Kubernetes node name prefix "
+        "(e.g. 'k8s-node-'). Overrides config [metrics] node_prefix. "
+        "Empty/unset keeps all pods. (replaces --metrics-cluster)",
+    )
+    # --ncps / --no-ncps: mutually exclusive opt-in / explicit-off.
+    # Default is None (no flag given -> consult config file, then False).
+    # Independent of --metrics / --no-metrics.
+    ncps_group = parser.add_mutually_exclusive_group()
+    ncps_group.add_argument(
+        "--ncps",
+        dest="ncps",
+        action="store_const",
+        const=True,
+        default=None,
+        help="enable NCPS cache-status display (Prometheus). "
+        "Off by default; enable in config with [ncps] enabled = true.",
+    )
+    ncps_group.add_argument(
+        "--no-ncps",
+        dest="ncps",
+        action="store_const",
+        const=False,
+        help="explicitly disable NCPS cache-status display "
+        "(overrides config file).",
     )
     parser.add_argument(
         "--schema",
@@ -2902,23 +3124,96 @@ def main(argv=None, *, client=None, stdout=None, stderr=None, is_tty=None) -> in
         is_tty = out.isatty() if hasattr(out, "isatty") else False
     mode = _resolve_mode(args, is_tty=is_tty, stderr=err)
 
+    # Config file loading: --config PATH > auto-discovery. A missing
+    # auto-discovered file is not an error; a missing explicit path is.
+    try:
+        file_config = load_file_config(args.config)
+    except ConfigError as e:
+        return _emit_error(
+            e, host=args.host or "", fmt=args.format, token=None,
+            stdout=out, stderr=err,
+        )
+
     # Token resolution: a missing token is a usage error (exit 2).
     try:
         token = resolve_token(args.token)
     except ConfigError as e:
         return _emit_error(
-            e, host=args.host, fmt=args.format, token=None,
+            # host may not be resolved yet; pass the raw flag value (or
+            # an empty string) so the error envelope stays schema-valid.
+            e, host=args.host or "", fmt=args.format, token=None,
+            stdout=out, stderr=err,
+        )
+
+    # Host resolution: a missing host is a usage error (exit 2).
+    try:
+        host = resolve_host(args.host, config_value=file_config.get("host"))
+    except ConfigError as e:
+        return _emit_error(
+            e, host="", fmt=args.format, token=None,
+            stdout=out, stderr=err,
+        )
+
+    # Metrics config: CLI flags > config file [metrics] section > defaults.
+    # args.metrics is True (--metrics), False (--no-metrics), or None (unset).
+    _raw_metrics = file_config.get("metrics")
+    metrics_section = _raw_metrics if isinstance(_raw_metrics, dict) else {}
+    if args.metrics is True:
+        metrics_enabled = True
+    elif args.metrics is False:
+        metrics_enabled = False       # explicit --no-metrics
+    else:
+        metrics_enabled = bool(metrics_section.get("enabled", False))
+
+    metrics_url = resolve_metrics_url(
+        args.metrics_url,
+        env=os.environ,
+        config_value=metrics_section.get("url", ""),
+    )
+    metrics_namespace = (
+        args.metrics_namespace
+        or metrics_section.get("namespace", "")
+        or "ci-runners"
+    )
+    metrics_node_prefix = (
+        args.node_prefix
+        if args.node_prefix is not None
+        else (metrics_section.get("node_prefix") or "")
+    )
+
+    # NCPS config: CLI flags > config file [ncps] section > default False.
+    # args.ncps is True (--ncps), False (--no-ncps), or None (unset).
+    _raw_ncps = file_config.get("ncps")
+    ncps_section = _raw_ncps if isinstance(_raw_ncps, dict) else {}
+    if args.ncps is True:
+        ncps_enabled = True
+    elif args.ncps is False:
+        ncps_enabled = False       # explicit --no-ncps
+    else:
+        ncps_enabled = bool(ncps_section.get("enabled", False))
+
+    # Guard: if metrics or NCPS is enabled a URL is required (no private
+    # default ships; the user must supply one via flag / env / config).
+    if (metrics_enabled or ncps_enabled) and not metrics_url:
+        return _emit_error(
+            ConfigError(
+                "Prometheus URL required when --metrics or --ncps is enabled. "
+                "Supply one via --metrics-url, $FJ_QUEUE_METRICS_URL, "
+                "or [metrics] url in the config file."
+            ),
+            host=host, fmt=args.format, token=None,
             stdout=out, stderr=err,
         )
 
     config = Config(
-        host=args.host,
+        host=host,
         token=token,
         timeout=args.timeout,
-        metrics_enabled=args.metrics,
-        metrics_url=resolve_metrics_url(args.metrics_url),
-        metrics_namespace=args.metrics_namespace,
-        metrics_cluster=args.metrics_cluster,
+        metrics_enabled=metrics_enabled,
+        metrics_url=metrics_url,
+        metrics_namespace=metrics_namespace,
+        metrics_node_prefix=metrics_node_prefix,
+        ncps_enabled=ncps_enabled,
     )
     labels = tuple(args.label or ())
 

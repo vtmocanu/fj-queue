@@ -21,7 +21,7 @@ import fj_queue as fq
 # ---------------------------------------------------------------------------
 
 NOW = datetime(2026, 5, 27, 14, 3, 11, tzinfo=timezone.utc)
-HOST = "git.wxs.ro"
+HOST = "git.example.com"
 
 
 def _runner(rid: int, *, status: str = "active", labels=("grunt",), name=None):
@@ -107,8 +107,8 @@ def test_naive_datetime_rejected():
 
 
 def test_filter_fields_echoed_into_snapshot():
-    snap = _agg(filter_repo="containers/theme-api", filter_label=("grunt",))
-    assert snap.filter_repo == "containers/theme-api"
+    snap = _agg(filter_repo="owner-c/theme-api", filter_label=("grunt",))
+    assert snap.filter_repo == "owner-c/theme-api"
     assert snap.filter_label == ("grunt",)
 
 
@@ -660,7 +660,7 @@ def test_live_fixture_aggregates_consistently():
     jobs = _load_fixture_jobs()
     # Both live jobs reference repos that resolve via M1 client; for the
     # pure aggregate test we provide a stable map.
-    repo_names = {589: "owner-a/repo-a", 586: "crossplane/harbor"}
+    repo_names = {589: "owner-a/repo-a", 586: "owner-b/harbor"}
     snap = _agg(runners=runners, jobs=jobs, repo_names=repo_names)
 
     # Live capture: 1 running + 1 waiting.
@@ -682,8 +682,8 @@ def test_live_fixture_aggregates_consistently():
     # snapshot.
     assert snap.warnings == ()
 
-    # The waiting job is in `crossplane/harbor` per the repo_names map.
-    assert waiting[0].repo == "crossplane/harbor"
+    # The waiting job is in `owner-b/harbor` per the repo_names map.
+    assert waiting[0].repo == "owner-b/harbor"
 
 
 
@@ -694,14 +694,14 @@ def test_live_fixture_aggregates_consistently():
 # ---------------------------------------------------------------------------
 
 
-def _pod(name, *, node="k8s-green-wn1", cpu=0.01, mem=700_000_000):
+def _pod(name, *, node="node-a-1", cpu=0.01, mem=700_000_000):
     return fq.PodResource(pod=name, node=node, cpu_cores=cpu, memory_bytes=mem)
 
 
 def test_runner_pods_pass_through_unchanged():
     pods = (
-        _pod("forgejo-runner-abc", node="k8s-green-wn1", cpu=0.001, mem=763322368),
-        _pod("forgejo-runner-def", node="k8s-green-wn2", cpu=0.01, mem=711917568),
+        _pod("forgejo-runner-abc", node="node-a-1", cpu=0.001, mem=763322368),
+        _pod("forgejo-runner-def", node="node-a-2", cpu=0.01, mem=711917568),
     )
     snap = _agg(runner_pods=pods)
     assert snap.runner_pods == pods
