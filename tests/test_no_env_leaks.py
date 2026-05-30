@@ -52,23 +52,23 @@ FORBIDDEN_PATTERNS: list[tuple[str, str]] = [
     (r"git\.wxs\.ro", "internal Forgejo host"),
     (r"prometheus\.wxs\.ro", "internal Prometheus host"),
     (r"nix-cache\.wxs\.ro", "internal NCPS host"),
-    (r"k8s-node-", "internal blue/green node prefix"),
-    (r"k8s-node-", "internal blue/green node prefix"),
-    (r"\bk8s-cluster\b", "internal cluster label value"),
+    (r"k8s-green-", "internal blue/green node prefix"),
+    (r"k8s-blue-", "internal blue/green node prefix"),
+    (r"\bk8s-cc\b", "internal cluster label value"),
     (
         r"forgejo-runner-[0-9a-f]+-[a-z0-9]{5}",
         "real runner pod name (Deployment hash + suffix)",
     ),
-    (r"/home/user/", "maintainer local filesystem path"),
-    (r"fj-queue", "internal task tracker path"),
+    (r"/Users/vmocanu/", "maintainer local filesystem path"),
+    (r"wxs/ai-tasks", "internal task tracker path"),
 ]
 
-# The 'owner-a' pattern: match only as an org login/slug (lowercase,
+# The 'crossplane' pattern: match only as an org login/slug (lowercase,
 # as part of an org/repo path or login field) but not as a project keyword
 # in prose (e.g. "Crossplane" with capital C is the OSS project name and
 # may appear in documentation).
-FORBIDDEN_PATTERNS.append((r"\"owner-a\"", "internal org slug as JSON string literal"))
-FORBIDDEN_PATTERNS.append((r"owner-a/", "internal org slug in repo path"))
+FORBIDDEN_PATTERNS.append((r"\"crossplane\"", "internal org slug as JSON string literal"))
+FORBIDDEN_PATTERNS.append((r"crossplane/", "internal org slug in repo path"))
 FORBIDDEN_PATTERNS.append((r"\bcontainers/", "real 'containers' org slug in repo path"))
 
 
