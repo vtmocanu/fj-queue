@@ -16,14 +16,14 @@ on:
         required: true
 
 permissions:
-  contents: read
+  contents: write # create the GitHub Release on tag push; the tap push uses HOMEBREW_TAP_TOKEN
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  homebrew:
+  release:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -32,6 +32,16 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+
+      # Cut a GitHub Release with auto-generated notes. Tag pushes only — a
+      # manual re-bump dispatch leaves the existing release untouched.
+      - name: Create GitHub Release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        with:
+          tag_name: ${{ env.TAG }}
+          name: ${{ env.TAG }}
+          generate_release_notes: true
 
       - uses: arduino/setup-task@b91d5d2c96a56797b48ac1e0e89220bf64044611 # v2.0.0
         with:
