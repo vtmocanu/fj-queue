@@ -2,3 +2,14 @@
 *.egg-info/
 __pycache__/
 .pytest_cache/
+# IDEs
+.cursor
+.vscode
+# Python
+*.pyc
+# Env files
+.env
+# Claude
+.claude/agent-team-tasks/
+.claude/scheduled_tasks.lock
+.claude/skill-stats.json
