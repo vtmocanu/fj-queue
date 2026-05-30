@@ -21,29 +21,31 @@ warnings. Designed for two audiences:
 
 ## Quick Start
 
-Requirements: Python 3.11+ and [`uv`](https://docs.astral.sh/uv/).
+Install with [Homebrew](https://brew.sh):
 
-No install step. Run directly:
+```bash
+brew tap vtmocanu/tap
+brew install fj-queue
+```
+
+This pulls in `uv` and Python automatically. Then run:
 
 ```bash
 # Single snapshot
-uv run fj_queue.py --host git.example.com
+fj-queue --host git.example.com
 
 # Live dashboard (default at a TTY)
-uv run fj_queue.py --host git.example.com --mode watch
+fj-queue --host git.example.com --mode watch
 
 # Agent: JSON output piped to jq
-uv run fj_queue.py --host git.example.com --format json | jq '.totals'
-```
-
-Or via the bundled `fj-queue` symlink:
-
-```bash
-./fj-queue --host git.example.com
+fj-queue --host git.example.com --format json | jq '.totals'
 ```
 
 Pass an **admin-scoped** Forgejo API token via `--token` or `$FORGEJO_TOKEN`.
 A non-admin token exits 3.
+
+Prefer running from a checkout without installing (`uv run fj_queue.py`)? See
+[Installation](docs/installation.md).
 
 For persistent settings, create `fj-queue.toml` in the current directory
 (or `~/.config/fj-queue/config.toml`):
