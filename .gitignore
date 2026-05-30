@@ -2,6 +2,8 @@
 *.egg-info/
 __pycache__/
 .pytest_cache/
+# Release build artifacts (generated Homebrew formula)
+dist/
 # IDEs
 .cursor
 .vscode

@@ -1,10 +1,10 @@
 name: release
 
-# On each v* tag, bump Formula/fj-queue.rb in vtmocanu/homebrew-tap (version +
-# tarball sha256). The default GITHUB_TOKEN cannot write to a second repo, so
-# the cross-repo push uses HOMEBREW_TAP_TOKEN (a fine-grained PAT scoped to
-# vtmocanu/homebrew-tap with contents:write). When that token can push to the
-# tap, the action commits directly to main (no fork, no PR).
+# On each v* tag, regenerate Formula/fj-queue.rb and push it to
+# vtmocanu/homebrew-tap. The default GITHUB_TOKEN cannot write to a second
+# repo, so the cross-repo push uses HOMEBREW_TAP_TOKEN (a fine-grained PAT
+# scoped to vtmocanu/homebrew-tap with contents:write). The bump itself is a
+# plain `git push` from the Taskfile (see Taskfile.yml), not a third-party action.
 on:
   push:
     tags:
@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to bump the formula to (e.g. v2.0.0)"
+        description: "Existing tag to publish the formula for (e.g. v2.0.0)"
         required: true
 
 permissions:
@@ -23,16 +23,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  bump-tap:
+  homebrew:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
-      - name: Bump fj-queue formula in vtmocanu/homebrew-tap
-        uses: mislav/bump-homebrew-formula-action@ccf2332299a883f6af50a1d2d41e5df7904dd769 # v4.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          formula-name: fj-queue
-          homebrew-tap: vtmocanu/homebrew-tap
-          tag-name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          create-pullrequest: false
+          persist-credentials: false
+
+      - uses: arduino/setup-task@b91d5d2c96a56797b48ac1e0e89220bf64044611 # v2.0.0
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate formula
+        run: task homebrew-formula VERSION="$TAG"
+
+      - name: Publish to tap
         env:
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: task homebrew-publish VERSION="$TAG" HOMEBREW_TAP_TOKEN="$HOMEBREW_TAP_TOKEN"
