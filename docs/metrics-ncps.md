@@ -47,6 +47,8 @@ from the runner inventory rows.
 
 ## NCPS cache-status display
 
+[NCPS](https://github.com/kalbasit/ncps) (Nix Cache Proxy Server) is a local Nix binary cache that pulls store paths from upstream caches and serves them on your network to speed up Nix builds; you point Nix-based CI runners at it so jobs reuse cached artifacts instead of re-downloading them. This section reports whether that cache is actively serving packages or sitting idle.
+
 Enabled with `--ncps` or `[ncps] enabled = true` in the config file.
 Independent of `[metrics] enabled`.
 
