@@ -4,7 +4,7 @@ version = "2.0.0"
 description = "Forgejo Actions runner & CI queue dashboard"
 requires-python = ">=3.11"
 dependencies = [
-    "httpx==0.27.2",
+    "httpx==0.28.1",
     "rich==13.9.4",
 ]
 
@@ -15,12 +15,12 @@ dependencies = [
 # the dev group as a standalone environment.
 [dependency-groups]
 dev = [
-    "httpx==0.27.2",
-    "jsonschema==4.23.0",
-    "pytest==8.3.4",
-    "respx==0.21.1",
+    "httpx==0.28.1",
+    "jsonschema==4.26.0",
+    "pytest==8.4.2",
+    "respx==0.23.1",
     "rich==13.9.4",
-    "syrupy==4.8.0",
+    "syrupy==4.9.1",
 ]
 
 # Surface fj_queue.py as a top-level module so `pytest tests/` and
