@@ -67,9 +67,9 @@ EXIT_SCHEMA_DRIFT = 5
 EXIT_INTERRUPTED = 130
 
 # Tool version (distinct from the JSON schema_version). Surfaced by
-# `--version`. v1.0.0 = the first complete implementation of the PRD #61
-# v1 contract.
-__version__ = "2.0.1"
+# `--version`. 0.x while the tool stabilizes; the CLI/JSON surface may
+# still change before a 1.0.
+__version__ = "0.0.1"
 
 
 # ---------------------------------------------------------------------------
