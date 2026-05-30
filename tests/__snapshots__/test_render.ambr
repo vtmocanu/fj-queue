@@ -1,0 +1,436 @@
+# serializer version: 1
+# name: test_plain_empty_golden_snapshot
+  '''
+  fj-queue snapshot  as_of=2026-05-27T14:03:11Z  host=git.example.com
+    filter: repo=-  label=-
+    schedulable_labels: []
+  
+  TOTALS: running=0  waiting=0  total=0
+  
+  RUNNERS (0 online of 0):
+    (none)
+  
+  RUNNER RESOURCES (per pod, 0):
+    (none)
+  
+  NCPS: no data
+  
+  PER REPO (0 repos):
+    (none)
+  
+  QUEUE (0 waiting):
+    (empty)
+  
+  WARNINGS (0):
+    (none)
+  '''
+# ---
+# name: test_plain_golden_snapshot
+  '''
+  fj-queue snapshot  as_of=2026-05-27T14:03:11Z  host=git.example.com
+    filter: repo=-  label=-
+    schedulable_labels: [docker, gpu, grunt]
+  
+  TOTALS: running=1  waiting=3  total=4
+  
+  RUNNERS (2 online of 3):
+    k8s-runner               active   online   v12.7.3    labels=[docker, grunt]  ephemeral=False
+    k8s-runner-b             offline  offline  v12.7.3    labels=[docker]  ephemeral=False
+    k8s-runner-c             idle     online   v12.7.3    labels=[grunt, gpu]  ephemeral=False
+  
+  RUNNER RESOURCES (per pod, 0):
+    (none)
+  
+  NCPS: no data
+  
+  PER REPO (3 repos):
+    owner-c/theme-api              running=0  waiting=2  total=2
+    owner-b/harbor                 running=0  waiting=1  total=1
+    owner-a/repo-a                    running=1  waiting=0  total=1
+  
+  QUEUE (3 waiting):
+    #1   [unschedulable      ] job_id=79969  repo=owner-b/harbor  name="pipeline"
+          attempt=1  runs_on=[special]  needs=[]
+    #2   [waiting_for_runner ] job_id=80239  repo=owner-c/theme-api  name="Semantic Release"
+          attempt=1  runs_on=[grunt]  needs=[]
+    #3   [blocked_on_needs   ] job_id=80300  repo=owner-c/theme-api  name="Deploy"
+          attempt=2  runs_on=[grunt]  needs=[build]
+  
+  WARNINGS (1):
+    unschedulable_labels  job_id=79969  repo=owner-b/harbor  runs_on=[special]
+      -> No online runner can satisfy runs_on: ['special']
+  '''
+# ---
+# name: test_plain_metrics_unavailable_golden
+  '''
+  fj-queue snapshot  as_of=2026-05-27T14:03:11Z  host=git.example.com
+    filter: repo=-  label=-
+    schedulable_labels: [docker, grunt]
+  
+  TOTALS: running=0  waiting=0  total=0
+  
+  RUNNERS (1 online of 1):
+    k8s-runner               active   online   v12.7.3    labels=[docker, grunt]  ephemeral=False
+  
+  RUNNER RESOURCES: unavailable (timeout querying prometheus at https://prometheus.example.com)
+  
+  NCPS: unavailable (timeout querying prometheus at https://prometheus.example.com)
+  
+  PER REPO (0 repos):
+    (none)
+  
+  QUEUE (0 waiting):
+    (empty)
+  
+  WARNINGS (0):
+    (none)
+  '''
+# ---
+# name: test_plain_ncps_active_golden
+  '''
+  fj-queue snapshot  as_of=2026-05-27T14:03:11Z  host=git.example.com
+    filter: repo=-  label=-
+    schedulable_labels: [grunt]
+  
+  TOTALS: running=0  waiting=0  total=0
+  
+  RUNNERS (1 online of 1):
+    k8s-runner               active   online   v12.7.3    labels=[grunt]  ephemeral=False
+  
+  RUNNER RESOURCES (per pod, 0):
+    (none)
+  
+  NCPS: active (8.5 req/s, 4 MiB/s, 0.3 miss/s)
+  
+  PER REPO (0 repos):
+    (none)
+  
+  QUEUE (0 waiting):
+    (empty)
+  
+  WARNINGS (0):
+    (none)
+  '''
+# ---
+# name: test_plain_ncps_disabled_golden
+  '''
+  fj-queue snapshot  as_of=2026-05-27T14:03:11Z  host=git.example.com
+    filter: repo=-  label=-
+    schedulable_labels: [grunt]
+  
+  TOTALS: running=0  waiting=0  total=0
+  
+  RUNNERS (1 online of 1):
+    k8s-runner               active   online   v12.7.3    labels=[grunt]  ephemeral=False
+  
+  RUNNER RESOURCES: disabled (--no-metrics)
+  
+  NCPS: disabled (--no-metrics)
+  
+  PER REPO (0 repos):
+    (none)
+  
+  QUEUE (0 waiting):
+    (empty)
+  
+  WARNINGS (0):
+    (none)
+  '''
+# ---
+# name: test_plain_ncps_idle_golden
+  '''
+  fj-queue snapshot  as_of=2026-05-27T14:03:11Z  host=git.example.com
+    filter: repo=-  label=-
+    schedulable_labels: [grunt]
+  
+  TOTALS: running=0  waiting=0  total=0
+  
+  RUNNERS (1 online of 1):
+    k8s-runner               active   online   v12.7.3    labels=[grunt]  ephemeral=False
+  
+  RUNNER RESOURCES (per pod, 0):
+    (none)
+  
+  NCPS: idle
+  
+  PER REPO (0 repos):
+    (none)
+  
+  QUEUE (0 waiting):
+    (empty)
+  
+  WARNINGS (0):
+    (none)
+  '''
+# ---
+# name: test_plain_runner_resources_golden
+  '''
+  fj-queue snapshot  as_of=2026-05-27T14:03:11Z  host=git.example.com
+    filter: repo=-  label=-
+    schedulable_labels: [docker, grunt]
+  
+  TOTALS: running=0  waiting=0  total=0
+  
+  RUNNERS (1 online of 1):
+    k8s-runner               active   online   v12.7.3    labels=[docker, grunt]  ephemeral=False
+  
+  RUNNER RESOURCES (per pod, 2):
+    ci-runner-aaaa1111ff-pod1          node=k8s-node-2  cpu=0.001 / -  mem=728 MiB / 17.4 GiB
+    ci-runner-aaaa1111ff-pod2          node=k8s-node-3  cpu=0.010 / -  mem=679 MiB / 17.4 GiB
+  
+  NCPS: no data
+  
+  PER REPO (0 repos):
+    (none)
+  
+  QUEUE (0 waiting):
+    (empty)
+  
+  WARNINGS (0):
+    (none)
+  '''
+# ---
+# name: test_plain_unicode_golden_snapshot
+  '''
+  fj-queue snapshot  as_of=2026-05-27T14:03:11Z  host=git.example.com
+    filter: repo=-  label=-
+    schedulable_labels: [docker, grunt, 测试]
+  
+  TOTALS: running=0  waiting=2  total=2
+  
+  RUNNERS (2 online of 2):
+    café-runner              idle     online   v12.7.3    labels=[grunt]  ephemeral=False
+    测试-runner                active   online   v12.7.3    labels=[docker, 测试]  ephemeral=False
+  
+  RUNNER RESOURCES (per pod, 0):
+    (none)
+  
+  NCPS: no data
+  
+  PER REPO (2 repos):
+    owner-c/cafe                   running=0  waiting=1  total=1
+    owner-c/test-repo                running=0  waiting=1  total=1
+  
+  QUEUE (2 waiting):
+    #1   [waiting_for_runner ] job_id=42  repo=owner-c/test-repo  name="🚀 Deploy"
+          attempt=1  runs_on=[测试]  needs=[]
+    #2   [unschedulable      ] job_id=43  repo=owner-c/cafe  name="café-job"
+          attempt=1  runs_on=[nonexistent]  needs=[]
+  
+  WARNINGS (1):
+    unschedulable_labels  job_id=43  repo=owner-c/cafe  runs_on=[nonexistent]
+      -> No online runner can satisfy runs_on: ['nonexistent']
+  '''
+# ---
+# name: test_rich_golden_snapshot_empty_width_120_no_color
+  '''
+  ╭─────────────────────────── snapshot ───────────────────────────╮
+  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z             │
+  │ runners: 0 online / 0    totals: running=0  waiting=0  total=0 │
+  ╰────────────────────────────────────────────────────────────────╯
+                            Runners                          
+  ┏━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┓
+  ┃ name   ┃ status ┃ online ┃ version ┃ labels ┃ ephemeral ┃
+  ┡━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━┩
+  │ (none) │        │        │         │        │           │
+  └────────┴────────┴────────┴─────────┴────────┴───────────┘
+               Runner resources (per pod)              
+  ┏━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
+  ┃ pod    ┃ node ┃ cpu (cores) ┃ mem (usage / limit) ┃
+  ┡━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
+  │ (none) │      │             │                     │
+  └────────┴──────┴─────────────┴─────────────────────┘
+  NCPS: no data
+                 Per repo               
+  ┏━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┓
+  ┃ repo   ┃ running ┃ waiting ┃ total ┃
+  ┡━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━┩
+  │ (none) │         │         │       │
+  └────────┴─────────┴─────────┴───────┘
+                            Queue (waiting, FIFO approx)                          
+  ┏━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━┓
+  ┃ # ┃ job_id ┃ repo    ┃ job_name ┃ attempt ┃ runs_on ┃ needs ┃ blocked_reason ┃
+  ┡━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━┩
+  │   │        │ (empty) │          │         │         │       │                │
+  └───┴────────┴─────────┴──────────┴─────────┴─────────┴───────┴────────────────┘
+  
+  '''
+# ---
+# name: test_rich_golden_snapshot_width_120_no_color
+  '''
+  ╭─────────────────────────── snapshot ───────────────────────────╮
+  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z             │
+  │ runners: 2 online / 3    totals: running=1  waiting=3  total=4 │
+  │ schedulable_labels: [docker, gpu, grunt]                       │
+  ╰────────────────────────────────────────────────────────────────╯
+                                   Runners                                 
+  ┏━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
+  ┃ name         ┃ status  ┃ online ┃ version ┃ labels        ┃ ephemeral ┃
+  ┡━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
+  │ k8s-runner   │ active  │  yes   │ v12.7.3 │ docker, grunt │    no     │
+  │ k8s-runner-b │ offline │   no   │ v12.7.3 │ docker        │    no     │
+  │ k8s-runner-c │ idle    │  yes   │ v12.7.3 │ grunt, gpu    │    no     │
+  └──────────────┴─────────┴────────┴─────────┴───────────────┴───────────┘
+               Runner resources (per pod)              
+  ┏━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
+  ┃ pod    ┃ node ┃ cpu (cores) ┃ mem (usage / limit) ┃
+  ┡━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
+  │ (none) │      │             │                     │
+  └────────┴──────┴─────────────┴─────────────────────┘
+  NCPS: no data
+                        Per repo                      
+  ┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┓
+  ┃ repo                 ┃ running ┃ waiting ┃ total ┃
+  ┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━┩
+  │ owner-c/theme-api │       0 │       2 │     2 │
+  │ owner-b/harbor    │       0 │       1 │     1 │
+  │ owner-a/repo-a       │       1 │       0 │     1 │
+  └──────────────────────┴─────────┴─────────┴───────┘
+                                         Queue (waiting, FIFO approx)                                        
+  ┏━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓
+  ┃ # ┃ job_id ┃ repo                 ┃ job_name         ┃   attempt ┃ runs_on ┃ needs ┃ blocked_reason     ┃
+  ┡━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩
+  │ 1 │  79969 │ owner-b/harbor    │ pipeline         │         1 │ special │ -     │ unschedulable      │
+  │ 2 │  80239 │ owner-c/theme-api │ Semantic Release │         1 │ grunt   │ -     │ waiting_for_runner │
+  │ 3 │  80300 │ owner-c/theme-api │ Deploy           │ 2 (rerun) │ grunt   │ build │ blocked_on_needs   │
+  └───┴────────┴──────────────────────┴──────────────────┴───────────┴─────────┴───────┴────────────────────┘
+                                                       Warnings                                                      
+  ┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+  ┃ code                 ┃ job_id ┃ repo              ┃ runs_on ┃ message                                           ┃
+  ┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+  │ unschedulable_labels │  79969 │ owner-b/harbor │         │ No online runner can satisfy runs_on: ['special'] │
+  └──────────────────────┴────────┴───────────────────┴─────────┴───────────────────────────────────────────────────┘
+  
+  '''
+# ---
+# name: test_rich_metrics_unavailable_golden_width_120_no_color
+  '''
+  ╭─────────────────────────── snapshot ───────────────────────────╮
+  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z             │
+  │ runners: 1 online / 1    totals: running=0  waiting=0  total=0 │
+  │ schedulable_labels: [docker, grunt]                            │
+  ╰────────────────────────────────────────────────────────────────╯
+                                 Runners                                
+  ┏━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
+  ┃ name       ┃ status ┃ online ┃ version ┃ labels        ┃ ephemeral ┃
+  ┡━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
+  │ k8s-runner │ active │  yes   │ v12.7.3 │ docker, grunt │    no     │
+  └────────────┴────────┴────────┴─────────┴───────────────┴───────────┘
+  Runner resources: unavailable (timeout querying prometheus at https://prometheus.example.com)
+  NCPS: unavailable (timeout querying prometheus at https://prometheus.example.com)
+                 Per repo               
+  ┏━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┓
+  ┃ repo   ┃ running ┃ waiting ┃ total ┃
+  ┡━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━┩
+  │ (none) │         │         │       │
+  └────────┴─────────┴─────────┴───────┘
+                            Queue (waiting, FIFO approx)                          
+  ┏━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━┓
+  ┃ # ┃ job_id ┃ repo    ┃ job_name ┃ attempt ┃ runs_on ┃ needs ┃ blocked_reason ┃
+  ┡━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━┩
+  │   │        │ (empty) │          │         │         │       │                │
+  └───┴────────┴─────────┴──────────┴─────────┴─────────┴───────┴────────────────┘
+  
+  '''
+# ---
+# name: test_rich_ncps_active_golden_width_120_no_color
+  '''
+  ╭─────────────────────────── snapshot ───────────────────────────╮
+  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z             │
+  │ runners: 1 online / 1    totals: running=0  waiting=0  total=0 │
+  │ schedulable_labels: [grunt]                                    │
+  ╰────────────────────────────────────────────────────────────────╯
+                              Runners                            
+  ┏━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┓
+  ┃ name       ┃ status ┃ online ┃ version ┃ labels ┃ ephemeral ┃
+  ┡━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━┩
+  │ k8s-runner │ active │  yes   │ v12.7.3 │ grunt  │    no     │
+  └────────────┴────────┴────────┴─────────┴────────┴───────────┘
+               Runner resources (per pod)              
+  ┏━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
+  ┃ pod    ┃ node ┃ cpu (cores) ┃ mem (usage / limit) ┃
+  ┡━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
+  │ (none) │      │             │                     │
+  └────────┴──────┴─────────────┴─────────────────────┘
+  NCPS: active (8.5 req/s, 4 MiB/s, 0.3 miss/s)
+                 Per repo               
+  ┏━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┓
+  ┃ repo   ┃ running ┃ waiting ┃ total ┃
+  ┡━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━┩
+  │ (none) │         │         │       │
+  └────────┴─────────┴─────────┴───────┘
+                            Queue (waiting, FIFO approx)                          
+  ┏━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━┓
+  ┃ # ┃ job_id ┃ repo    ┃ job_name ┃ attempt ┃ runs_on ┃ needs ┃ blocked_reason ┃
+  ┡━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━┩
+  │   │        │ (empty) │          │         │         │       │                │
+  └───┴────────┴─────────┴──────────┴─────────┴─────────┴───────┴────────────────┘
+  
+  '''
+# ---
+# name: test_rich_ncps_unavailable_golden_width_120_no_color
+  '''
+  ╭─────────────────────────── snapshot ───────────────────────────╮
+  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z             │
+  │ runners: 1 online / 1    totals: running=0  waiting=0  total=0 │
+  │ schedulable_labels: [grunt]                                    │
+  ╰────────────────────────────────────────────────────────────────╯
+                              Runners                            
+  ┏━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┓
+  ┃ name       ┃ status ┃ online ┃ version ┃ labels ┃ ephemeral ┃
+  ┡━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━┩
+  │ k8s-runner │ active │  yes   │ v12.7.3 │ grunt  │    no     │
+  └────────────┴────────┴────────┴─────────┴────────┴───────────┘
+  Runner resources: unavailable (timeout querying prometheus)
+  NCPS: unavailable (timeout querying prometheus)
+                 Per repo               
+  ┏━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┓
+  ┃ repo   ┃ running ┃ waiting ┃ total ┃
+  ┡━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━┩
+  │ (none) │         │         │       │
+  └────────┴─────────┴─────────┴───────┘
+                            Queue (waiting, FIFO approx)                          
+  ┏━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━┓
+  ┃ # ┃ job_id ┃ repo    ┃ job_name ┃ attempt ┃ runs_on ┃ needs ┃ blocked_reason ┃
+  ┡━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━┩
+  │   │        │ (empty) │          │         │         │       │                │
+  └───┴────────┴─────────┴──────────┴─────────┴─────────┴───────┴────────────────┘
+  
+  '''
+# ---
+# name: test_rich_runner_resources_golden_width_120_no_color
+  '''
+  ╭─────────────────────────── snapshot ───────────────────────────╮
+  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z             │
+  │ runners: 1 online / 1    totals: running=0  waiting=0  total=0 │
+  │ schedulable_labels: [docker, grunt]                            │
+  ╰────────────────────────────────────────────────────────────────╯
+                                 Runners                                
+  ┏━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
+  ┃ name       ┃ status ┃ online ┃ version ┃ labels        ┃ ephemeral ┃
+  ┡━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
+  │ k8s-runner │ active │  yes   │ v12.7.3 │ docker, grunt │    no     │
+  └────────────┴────────┴────────┴─────────┴───────────────┴───────────┘
+                                Runner resources (per pod)                               
+  ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
+  ┃ pod                             ┃ node          ┃ cpu (cores) ┃ mem (usage / limit) ┃
+  ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
+  │ ci-runner-aaaa1111ff-pod1 │ k8s-node-2 │   0.001 / — │  728 MiB / 17.4 GiB │
+  │ ci-runner-aaaa1111ff-pod2 │ k8s-node-3 │   0.010 / — │  679 MiB / 17.4 GiB │
+  └─────────────────────────────────┴───────────────┴─────────────┴─────────────────────┘
+  NCPS: no data
+                 Per repo               
+  ┏━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┓
+  ┃ repo   ┃ running ┃ waiting ┃ total ┃
+  ┡━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━┩
+  │ (none) │         │         │       │
+  └────────┴─────────┴─────────┴───────┘
+                            Queue (waiting, FIFO approx)                          
+  ┏━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━┓
+  ┃ # ┃ job_id ┃ repo    ┃ job_name ┃ attempt ┃ runs_on ┃ needs ┃ blocked_reason ┃
+  ┡━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━┩
+  │   │        │ (empty) │          │         │         │       │                │
+  └───┴────────┴─────────┴──────────┴─────────┴─────────┴───────┴────────────────┘
+  
+  '''
+# ---

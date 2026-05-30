@@ -1,0 +1,143 @@
+{
+  "cpu": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": { "pod": "ci-runner-aaaa1111ff-pod1" },
+          "value": [1780051394.097, "0.00109"]
+        },
+        {
+          "metric": { "pod": "ci-runner-aaaa1111ff-pod3" },
+          "value": [1780051394.097, "0.00128"]
+        },
+        {
+          "metric": { "pod": "ci-runner-aaaa1111ff-pod2" },
+          "value": [1780051394.097, "0.01023"]
+        }
+      ]
+    }
+  },
+  "memory": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": { "pod": "ci-runner-aaaa1111ff-pod1" },
+          "value": [1780051394.499, "763322368"]
+        },
+        {
+          "metric": { "pod": "ci-runner-aaaa1111ff-pod3" },
+          "value": [1780051394.499, "643313664"]
+        },
+        {
+          "metric": { "pod": "ci-runner-aaaa1111ff-pod2" },
+          "value": [1780051394.499, "711917568"]
+        }
+      ]
+    }
+  },
+  "info": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": {
+            "__name__": "kube_pod_info",
+            "cluster": "k8s-cluster",
+            "namespace": "forgejo-runner",
+            "node": "k8s-node-2",
+            "pod": "ci-runner-aaaa1111ff-pod1"
+          },
+          "value": [1780051394.745, "1"]
+        },
+        {
+          "metric": {
+            "__name__": "kube_pod_info",
+            "cluster": "k8s-cluster",
+            "namespace": "forgejo-runner",
+            "node": "k8s-node-1",
+            "pod": "ci-runner-aaaa1111ff-pod3"
+          },
+          "value": [1780051394.745, "1"]
+        },
+        {
+          "metric": {
+            "__name__": "kube_pod_info",
+            "cluster": "k8s-cluster",
+            "namespace": "forgejo-runner",
+            "node": "k8s-node-3",
+            "pod": "ci-runner-aaaa1111ff-pod2"
+          },
+          "value": [1780051394.745, "1"]
+        }
+      ]
+    }
+  },
+  "memory_limit": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": { "pod": "ci-runner-aaaa1111ff-pod1" },
+          "value": [1780052001.832, "18674094196"]
+        },
+        {
+          "metric": { "pod": "ci-runner-aaaa1111ff-pod3" },
+          "value": [1780052001.832, "18674094196"]
+        },
+        {
+          "metric": { "pod": "ci-runner-aaaa1111ff-pod2" },
+          "value": [1780052001.832, "18674094196"]
+        }
+      ]
+    }
+  },
+  "cpu_limit": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": []
+    }
+  },
+  "ncps_requests": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        { "metric": {}, "value": [1780053817.84, "8.5"] }
+      ]
+    }
+  },
+  "ncps_inflight": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        { "metric": {}, "value": [1780053818.353, "1"] }
+      ]
+    }
+  },
+  "ncps_upstream": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        { "metric": {}, "value": [1780053818.819, "0.3"] }
+      ]
+    }
+  },
+  "ncps_bytes": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        { "metric": {}, "value": [1780053819.154, "4000000"] }
+      ]
+    }
+  }
+}

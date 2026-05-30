@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://git.example.com/wxs/mackup/raw/branch/main/scripts/fj-queue/schema/fj-queue.v1.json",
+  "title": "fj-queue v1 snapshot",
+  "description": "Open additive-only inner objects: new optional fields land in v1.x without bumping `schema_version`. The top-level oneOf branches (`SuccessEnvelope`, `ErrorEnvelope`) are closed only to disambiguate the two envelope shapes. Removal or repurposing of an existing key bumps `schema_version`.",
+  "oneOf": [
+    { "$ref": "#/$defs/SuccessEnvelope" },
+    { "$ref": "#/$defs/ErrorEnvelope" }
+  ],
+  "$defs": {
+    "SuccessEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "as_of",
+        "host",
+        "filter",
+        "schedulable_labels",
+        "runners",
+        "totals",
+        "per_repo",
+        "queue",
+        "warnings",
+        "runner_pods",
+        "metrics",
+        "ncps"
+      ],
+      "properties": {
+        "schema_version": {
+          "description": "Wire-contract version. Bumped on breaking change.",
+          "type": "integer",
+          "const": 1
+        },
+        "as_of": {
+          "description": "RFC3339 UTC timestamp of the snapshot fetch. 'Z' suffix; second precision.",
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "host": {
+          "description": "Forgejo host the snapshot was taken from.",
+          "type": "string"
+        },
+        "filter": {
+          "description": "Echoes the --repo / --label scoping passed on the CLI. null fields mean unscoped.",
+          "type": "object",
+          "required": ["repo", "label"],
+          "properties": {
+            "repo": { "type": ["string", "null"] },
+            "label": {
+              "oneOf": [
+                { "type": "null" },
+                {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              ]
+            }
+          }
+        },
+        "schedulable_labels": {
+          "description": "Alphabetically sorted union of ONLINE runners' labels.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "runners": {
+          "description": "Every known runner (including offline). Sorted by name.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Runner" }
+        },
+        "totals": {
+          "description": "Instance-wide counts, even when filter.repo/label is set.",
+          "type": "object",
+          "required": ["running", "waiting", "total"],
+          "properties": {
+            "running": { "type": "integer", "minimum": 0 },
+            "waiting": { "type": "integer", "minimum": 0 },
+            "total":   { "type": "integer", "minimum": 0 }
+          }
+        },
+        "per_repo": {
+          "description": "Per-repo breakdown. Sorted by repo slug.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/RepoBreakdown" }
+        },
+        "queue": {
+          "description": "WAITING jobs only. Sorted by job_id ascending (FIFO approximation).",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Job" }
+        },
+        "warnings": {
+          "description": "Structured warning rows. Sorted by job_id.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Warning" }
+        },
+        "runner_pods": {
+          "description": "Per-pod runner CPU/memory from Prometheus (combined containers). Raw numbers, not human-formatted. Sorted by pod name. Empty when metrics are disabled or the fetch failed (see `metrics.error`).",
+          "type": "array",
+          "items": { "$ref": "#/$defs/PodResource" }
+        },
+        "metrics": {
+          "description": "Metadata about the runner-metrics fetch. `error` is null on success and the failure reason string on a Prometheus problem (in which case `runner_pods` is []).",
+          "type": "object",
+          "required": ["source", "error", "rate_window"],
+          "properties": {
+            "source": { "type": "string" },
+            "error": { "type": ["string", "null"] },
+            "rate_window": {
+              "description": "CPU rate window used by the per-pod query (e.g. \"5m\").",
+              "type": "string"
+            }
+          }
+        },
+        "ncps": {
+          "description": "NCPS (nix cache proxy) cache activity from Prometheus, or null when metrics are disabled or the NCPS fetch failed.",
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/NcpsStatus" }
+          ]
+        }
+      }
+    },
+    "ErrorEnvelope": {
+      "description": "Emitted to stdout on failure. Human diagnostics go to stderr. Exit code is derived from `error.code`: usage=2, auth=3, connection=4, schema_drift=5, internal=1.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "error"],
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "error": {
+          "type": "object",
+          "required": ["code", "message", "host"],
+          "properties": {
+            "code": {
+              "type": "string",
+              "enum": ["usage", "auth", "connection", "schema_drift", "internal"]
+            },
+            "message": { "type": "string" },
+            "host": { "type": "string" }
+          }
+        }
+      }
+    },
+    "Runner": {
+      "type": "object",
+      "required": ["id", "name", "status", "online", "version", "labels", "ephemeral"],
+      "properties": {
+        "id": { "type": "integer" },
+        "name": { "type": "string" },
+        "status": {
+          "description": "Forgejo runner status. Not enum-constrained in swagger; defensive parse may include unknown values.",
+          "type": "string"
+        },
+        "online": {
+          "description": "Derived: true iff status in {active, idle}.",
+          "type": "boolean"
+        },
+        "version": { "type": "string" },
+        "labels": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "ephemeral": { "type": "boolean" }
+      }
+    },
+    "RepoBreakdown": {
+      "type": "object",
+      "required": ["repo", "repo_id", "running", "waiting", "total"],
+      "properties": {
+        "repo": { "type": "string" },
+        "repo_id": { "type": "integer" },
+        "running": { "type": "integer", "minimum": 0 },
+        "waiting": { "type": "integer", "minimum": 0 },
+        "total":   { "type": "integer", "minimum": 0 }
+      }
+    },
+    "Job": {
+      "type": "object",
+      "required": [
+        "job_id",
+        "task_id",
+        "position",
+        "status",
+        "repo",
+        "repo_id",
+        "owner_id",
+        "job_name",
+        "attempt",
+        "runs_on",
+        "needs",
+        "blocked_reason"
+      ],
+      "properties": {
+        "job_id": { "type": "integer" },
+        "task_id": {
+          "description": "null while waiting (Forgejo emits 0 on the wire; fj-queue normalizes the sentinel); non-zero integer once a runner picks the job up.",
+          "type": ["integer", "null"]
+        },
+        "position": {
+          "description": "1-based index over WAITING jobs only.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": ["waiting", "running"]
+        },
+        "repo": { "type": "string" },
+        "repo_id": { "type": "integer" },
+        "owner_id": { "type": "integer" },
+        "job_name": { "type": "string" },
+        "attempt": {
+          "description": ">1 indicates a rerun.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "runs_on": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "needs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "blocked_reason": {
+          "description": "null while running; one of the strings while waiting.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "string",
+              "enum": ["unschedulable", "blocked_on_needs", "waiting_for_runner"]
+            }
+          ]
+        }
+      }
+    },
+    "PodResource": {
+      "type": "object",
+      "required": ["pod", "node", "cpu_cores", "memory_bytes", "cpu_limit_cores", "memory_limit_bytes"],
+      "properties": {
+        "pod": { "type": "string" },
+        "node": {
+          "description": "Kubernetes node the pod runs on. Used for the blue/green cluster filter (node prefix k8s-node-* / k8s-node-*).",
+          "type": "string"
+        },
+        "cpu_cores": {
+          "description": "5m-rate CPU usage in cores, combined across the pod's containers.",
+          "type": "number"
+        },
+        "memory_bytes": {
+          "description": "Working-set memory in raw bytes, combined across the pod's containers.",
+          "type": "integer"
+        },
+        "cpu_limit_cores": {
+          "description": "Configured CPU limit in cores, summed across containers. null when no CPU limit is set (the current reality for these pods).",
+          "type": ["number", "null"]
+        },
+        "memory_limit_bytes": {
+          "description": "Configured memory limit in raw bytes, summed across containers. null when no memory limit is set.",
+          "type": ["integer", "null"]
+        }
+      }
+    },
+    "NcpsStatus": {
+      "type": "object",
+      "required": ["active", "requests_per_sec", "inflight", "upstream_per_sec", "bytes_per_sec"],
+      "properties": {
+        "active": {
+          "description": "true iff NCPS is serving requests (requests_per_sec > 0) or has in-flight requests; otherwise idle.",
+          "type": "boolean"
+        },
+        "requests_per_sec": {
+          "description": "Requests/sec served by NCPS over the rate window.",
+          "type": "number"
+        },
+        "inflight": {
+          "description": "Requests in flight right now.",
+          "type": "integer"
+        },
+        "upstream_per_sec": {
+          "description": "Upstream fetches/sec = cache misses (NCPS pulling from cache.nixos.org).",
+          "type": "number"
+        },
+        "bytes_per_sec": {
+          "description": "Bytes/sec served over the rate window.",
+          "type": "number"
+        }
+      }
+    },
+    "Warning": {
+      "type": "object",
+      "required": ["code", "job_id", "repo", "runs_on", "message"],
+      "properties": {
+        "code": {
+          "description": "Structured warning code. M3 currently emits only `unschedulable_labels`; additive in future versions.",
+          "type": "string"
+        },
+        "job_id": { "type": "integer" },
+        "repo": { "type": "string" },
+        "runs_on": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}
