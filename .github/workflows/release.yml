@@ -28,6 +28,10 @@ jobs:
     timeout-minutes: 10
     env:
       TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      # Taskfile.yml includes a reusable file from github.com/vtmocanu/task over
+      # https in CI; remote Taskfiles are an experimental Task feature behind this
+      # flag, and `task --yes` auto-confirms the one-time remote-trust prompt.
+      TASK_X_REMOTE_TASKFILES: "1"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -49,9 +53,9 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate formula
-        run: task homebrew-formula VERSION="$TAG"
+        run: task --yes brew:formula VERSION="$TAG"
 
       - name: Publish to tap
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: task homebrew-publish VERSION="$TAG" HOMEBREW_TAP_TOKEN="$HOMEBREW_TAP_TOKEN"
+        run: task --yes brew:publish VERSION="$TAG" HOMEBREW_TAP_TOKEN="$HOMEBREW_TAP_TOKEN"

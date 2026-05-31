@@ -1,81 +1,27 @@
-# Release automation for the Homebrew tap (vtmocanu/homebrew-tap).
-# Mirrors the vfarcic/dot-ai-cli pattern: regenerate the formula from a
-# template, then clone the tap and push the update with HOMEBREW_TAP_TOKEN.
-# Run by .github/workflows/release.yml on each v* tag; runnable locally too.
-version: '3'
+---
+# Release automation. The generic mechanics (compute the tarball sha256, render
+# the formula, push it to the tap) live in the reusable homebrew-tap.yml in
+# github.com/vtmocanu/task; this repo owns only the formula body (Formula.rb.tmpl)
+# and the identity vars below. Run by .github/workflows/release.yml on each v*
+# tag, and runnable locally.
+version: "3"
+
+vars:
+  # Reusable task library: public GitHub repo (github.com/vtmocanu/task).
+  # Local checkout while developing; public raw URL in CI (no token needed).
+  TASK_REPO_LOCAL: ~/stuff/gitrepos/gh/vtmocanu/task
+  TASK_REPO_RAW: https://raw.githubusercontent.com/vtmocanu/task/main
+
+includes:
+  brew:
+    taskfile: "{{if .CI}}{{.TASK_REPO_RAW}}/homebrew-tap.yml{{else}}{{.TASK_REPO_LOCAL}}/homebrew-tap.yml{{end}}"
+    vars:
+      NAME: fj-queue
+      GH_REPO: vtmocanu/fj-queue
+      TAP_REPO: vtmocanu/homebrew-tap
 
 tasks:
-  homebrew-formula:
-    desc: Regenerate dist/fj-queue.rb for VERSION (computes the tarball sha256)
-    requires:
-      vars: [VERSION]
-    vars:
-      TARBALL_URL: https://github.com/vtmocanu/fj-queue/archive/refs/tags/{{.VERSION}}.tar.gz
-      SHA256:
-        sh: curl -fsSL "https://github.com/vtmocanu/fj-queue/archive/refs/tags/{{.VERSION}}.tar.gz" | shasum -a 256 | awk '{print $1}'
+  default:
+    desc: Show available tasks
     cmds:
-      # Guard: a curl|shasum pipe can't pipefail inside a var, so a 404 yields
-      # the empty-input digest. Refuse to emit a formula with a bogus sha.
-      - |
-        if [ -z "{{.SHA256}}" ] || [ "{{.SHA256}}" = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" ]; then
-          echo "error: empty/invalid sha256 for {{.VERSION}} (bad tag or network failure): {{.TARBALL_URL}}" >&2
-          exit 1
-        fi
-      - mkdir -p dist
-      - |
-        cat > dist/fj-queue.rb << 'FORMULA'
-        class FjQueue < Formula
-          desc "Forgejo Actions runner and CI queue dashboard"
-          homepage "https://github.com/vtmocanu/fj-queue"
-          url "{{.TARBALL_URL}}"
-          sha256 "{{.SHA256}}"
-          license "MIT"
-
-          depends_on "python@3.13"
-          depends_on "uv"
-
-          def install
-            libexec.install "fj_queue.py"
-
-            # uv resolves the script's PEP-723 deps (httpx, rich) on first run.
-            # Pin the interpreter to the brewed python@3.13 so uv reuses it
-            # instead of downloading a managed CPython.
-            (bin/"fj-queue").write <<~SH
-              #!/bin/bash
-              exec "#{Formula["uv"].opt_bin}/uv" run --python "#{Formula["python@3.13"].opt_bin}/python3.13" "#{libexec}/fj_queue.py" "$@"
-            SH
-          end
-
-          test do
-            assert_match "fj-queue", shell_output("#{bin}/fj-queue --version")
-          end
-        end
-        FORMULA
-      - echo "Generated dist/fj-queue.rb for {{.VERSION}} (sha256 {{.SHA256}})"
-
-  homebrew-publish:
-    desc: Clone the tap, copy the generated formula, commit and push
-    requires:
-      vars: [VERSION, HOMEBREW_TAP_TOKEN]
-    cmds:
-      - |
-        set -eu
-        if [ ! -f dist/fj-queue.rb ]; then
-          echo "error: dist/fj-queue.rb missing — run 'task homebrew-formula VERSION={{.VERSION}}' first" >&2
-          exit 1
-        fi
-        WORK_DIR="$(mktemp -d)"
-        trap 'rm -rf "$WORK_DIR"' EXIT
-        git clone --quiet "https://x-access-token:{{.HOMEBREW_TAP_TOKEN}}@github.com/vtmocanu/homebrew-tap.git" "$WORK_DIR"
-        cp "{{.TASKFILE_DIR}}/dist/fj-queue.rb" "$WORK_DIR/Formula/fj-queue.rb"
-        cd "$WORK_DIR"
-        git add Formula/fj-queue.rb
-        git config user.name "github-actions[bot]"
-        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        if git diff --cached --quiet; then
-          echo "fj-queue formula already current for {{.VERSION}}; nothing to publish."
-        else
-          git commit -q -m "Update fj-queue formula to {{.VERSION}}"
-          git push --quiet origin main
-          echo "Published fj-queue {{.VERSION}} to vtmocanu/homebrew-tap."
-        fi
+      - task --list
