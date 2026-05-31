@@ -55,7 +55,14 @@ def _job(jid, *, status="waiting", repo_id=85, owner_id=11, runs_on=("grunt",), 
     )
 
 
+# Pin the tool version in golden snapshots so a real release bump does not
+# churn every render snapshot. Production renders the live __version__;
+# tests that assert the renderer surfaces the field pass an explicit value.
+TEST_TOOL_VERSION = "0.0.0-test"
+
+
 def _snap(runners=(), jobs=(), repo_names=None, **kwargs):
+    kwargs.setdefault("tool_version", TEST_TOOL_VERSION)
     return fq.aggregate(
         runners=runners,
         jobs=jobs,
@@ -183,6 +190,17 @@ def test_plain_header_carries_as_of_and_host():
     out = fq.render_plain(_typical_snap())
     assert "as_of=2026-05-27T14:03:11Z" in out
     assert "host=git.example.com" in out
+
+
+def test_plain_header_shows_tool_version():
+    """The renderer surfaces whatever tool_version the Snapshot carries."""
+    out = fq.render_plain(_snap(tool_version="1.2.3"))
+    assert "fj-queue v1.2.3" in out
+
+
+def test_rich_header_shows_tool_version():
+    text = _render_rich_to_text(_snap(tool_version="1.2.3"), width=120)
+    assert "v1.2.3" in text
 
 
 # ---------------------------------------------------------------------------

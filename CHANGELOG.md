@@ -7,6 +7,24 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **`tool_version` in JSON output.** `--format json` now includes a top-level
+  `"tool_version"` string field (e.g. `"0.0.1"`) in every success snapshot.
+  It is required and always present. This field carries the fj-queue release
+  that produced the document, and is distinct from `schema_version` (the
+  wire-format contract version, which stays `1`). Agents that need to log or
+  branch on which fj-queue version produced a snapshot should read
+  `tool_version`; agents validating document structure should check
+  `schema_version`.
+- **Version in renderer headers.** The plain-text header now reads
+  `fj-queue v<version>  as_of=...  host=...`. The Rich renderer header shows
+  `fj-queue` followed by a dim `v<version>` then `@ <host>`.
+
+---
+
 ## [2.0.0] - 2026-05-30
 
 ### Breaking

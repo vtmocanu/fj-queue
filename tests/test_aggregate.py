@@ -112,6 +112,17 @@ def test_filter_fields_echoed_into_snapshot():
     assert snap.filter_label == ("grunt",)
 
 
+def test_tool_version_defaults_to_module_version():
+    """The renderer header reads Snapshot.tool_version; by default it is
+    the live module __version__ so the running release shows in the UI.
+    """
+    assert _agg().tool_version == fq.__version__
+
+
+def test_tool_version_can_be_overridden():
+    assert _agg(tool_version="9.9.9").tool_version == "9.9.9"
+
+
 # ---------------------------------------------------------------------------
 # Post-aggregate filter scoping (`_scope_snapshot_queue`).
 #

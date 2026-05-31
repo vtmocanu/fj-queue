@@ -20,6 +20,7 @@ A success snapshot:
 ```jsonc
 {
   "schema_version": 1,
+  "tool_version": "0.0.1",                 // fj-queue release (see below)
   "as_of": "2026-05-26T14:03:11Z",        // RFC3339 UTC fetch timestamp
   "host": "git.example.com",
   "filter": { "repo": null, "label": null },  // echoes --repo / --label
@@ -101,3 +102,17 @@ success from error.
 `schema_version` bumps only when an existing key is removed or repurposed.
 Agents should treat unknown inner-object fields as forward-compatible
 additions.
+
+## tool_version vs schema_version
+
+`tool_version` is the fj-queue release string (e.g. `"0.0.1"`). It is a
+**required** top-level field in every success snapshot, always present.
+
+`schema_version` (currently `1`) describes the JSON wire-format contract: it
+changes only when the envelope shape breaks backwards compatibility.
+
+The two fields are independent: the tool version advances with every release;
+the schema version stays `1` as long as the contract is additive. Agents that
+need to log or branch on which version of fj-queue produced a document should
+read `tool_version`; agents validating document structure should check
+`schema_version`.

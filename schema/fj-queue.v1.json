@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/vtmocanu/fj-queue/main/schema/fj-queue.v1.json",
   "title": "fj-queue v1 snapshot",
-  "description": "Open additive-only inner objects: new optional fields land in v1.x without bumping `schema_version`. The top-level oneOf branches (`SuccessEnvelope`, `ErrorEnvelope`) are closed only to disambiguate the two envelope shapes. Removal or repurposing of an existing key bumps `schema_version`.",
+  "description": "Additive-only within v1.x: new fields (top-level OR inner) land without bumping `schema_version` and are reflected in this committed schema (e.g. the top-level `runner_pods`, `metrics`, `ncps`, `ncps_error`, `tool_version` keys were all added this way). The two top-level oneOf branches (`SuccessEnvelope`, `ErrorEnvelope`) keep `additionalProperties: false` to disambiguate the success and error shapes, so consumers MUST validate against the published schema for the version they target rather than a pinned older copy; inner objects stay open so unknown future keys never break a pinned consumer. Removal or repurposing of an existing key bumps `schema_version`.",
   "oneOf": [
     { "$ref": "#/$defs/SuccessEnvelope" },
     { "$ref": "#/$defs/ErrorEnvelope" }
@@ -13,6 +13,7 @@
       "additionalProperties": false,
       "required": [
         "schema_version",
+        "tool_version",
         "as_of",
         "host",
         "filter",
@@ -32,6 +33,10 @@
           "description": "Wire-contract version. Bumped on breaking change.",
           "type": "integer",
           "const": 1
+        },
+        "tool_version": {
+          "description": "The fj-queue release that produced this document. Distinct from schema_version (the wire-format version).",
+          "type": "string"
         },
         "as_of": {
           "description": "RFC3339 UTC timestamp of the snapshot fetch. 'Z' suffix; second precision.",

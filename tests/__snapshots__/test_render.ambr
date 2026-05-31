@@ -1,7 +1,7 @@
 # serializer version: 1
 # name: test_plain_empty_golden_snapshot
   '''
-  fj-queue snapshot  as_of=2026-05-27T14:03:11Z  host=git.example.com
+  fj-queue v0.0.0-test  as_of=2026-05-27T14:03:11Z  host=git.example.com
     filter: repo=-  label=-
     schedulable_labels: []
   
@@ -27,7 +27,7 @@
 # ---
 # name: test_plain_golden_snapshot
   '''
-  fj-queue snapshot  as_of=2026-05-27T14:03:11Z  host=git.example.com
+  fj-queue v0.0.0-test  as_of=2026-05-27T14:03:11Z  host=git.example.com
     filter: repo=-  label=-
     schedulable_labels: [docker, gpu, grunt]
   
@@ -63,7 +63,7 @@
 # ---
 # name: test_plain_metrics_unavailable_golden
   '''
-  fj-queue snapshot  as_of=2026-05-27T14:03:11Z  host=git.example.com
+  fj-queue v0.0.0-test  as_of=2026-05-27T14:03:11Z  host=git.example.com
     filter: repo=-  label=-
     schedulable_labels: [docker, grunt]
   
@@ -88,7 +88,7 @@
 # ---
 # name: test_plain_ncps_active_golden
   '''
-  fj-queue snapshot  as_of=2026-05-27T14:03:11Z  host=git.example.com
+  fj-queue v0.0.0-test  as_of=2026-05-27T14:03:11Z  host=git.example.com
     filter: repo=-  label=-
     schedulable_labels: [grunt]
   
@@ -114,7 +114,7 @@
 # ---
 # name: test_plain_ncps_disabled_golden
   '''
-  fj-queue snapshot  as_of=2026-05-27T14:03:11Z  host=git.example.com
+  fj-queue v0.0.0-test  as_of=2026-05-27T14:03:11Z  host=git.example.com
     filter: repo=-  label=-
     schedulable_labels: [grunt]
   
@@ -139,7 +139,7 @@
 # ---
 # name: test_plain_ncps_idle_golden
   '''
-  fj-queue snapshot  as_of=2026-05-27T14:03:11Z  host=git.example.com
+  fj-queue v0.0.0-test  as_of=2026-05-27T14:03:11Z  host=git.example.com
     filter: repo=-  label=-
     schedulable_labels: [grunt]
   
@@ -165,7 +165,7 @@
 # ---
 # name: test_plain_runner_resources_golden
   '''
-  fj-queue snapshot  as_of=2026-05-27T14:03:11Z  host=git.example.com
+  fj-queue v0.0.0-test  as_of=2026-05-27T14:03:11Z  host=git.example.com
     filter: repo=-  label=-
     schedulable_labels: [docker, grunt]
   
@@ -192,7 +192,7 @@
 # ---
 # name: test_plain_unicode_golden_snapshot
   '''
-  fj-queue snapshot  as_of=2026-05-27T14:03:11Z  host=git.example.com
+  fj-queue v0.0.0-test  as_of=2026-05-27T14:03:11Z  host=git.example.com
     filter: repo=-  label=-
     schedulable_labels: [docker, grunt, 测试]
   
@@ -224,10 +224,10 @@
 # ---
 # name: test_rich_golden_snapshot_empty_width_120_no_color
   '''
-  ╭─────────────────────────── snapshot ───────────────────────────╮
-  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z        │
-  │ runners: 0 online / 0    totals: running=0  waiting=0  total=0 │
-  ╰────────────────────────────────────────────────────────────────╯
+  ╭───────────────────────────── snapshot ──────────────────────────────╮
+  │ fj-queue v0.0.0-test @ git.example.com   as_of=2026-05-27T14:03:11Z │
+  │ runners: 0 online / 0    totals: running=0  waiting=0  total=0      │
+  ╰─────────────────────────────────────────────────────────────────────╯
                             Runners                          
   ┏━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┓
   ┃ name   ┃ status ┃ online ┃ version ┃ labels ┃ ephemeral ┃
@@ -258,11 +258,11 @@
 # ---
 # name: test_rich_golden_snapshot_width_120_no_color
   '''
-  ╭─────────────────────────── snapshot ───────────────────────────╮
-  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z        │
-  │ runners: 2 online / 3    totals: running=1  waiting=3  total=4 │
-  │ schedulable_labels: [docker, gpu, grunt]                       │
-  ╰────────────────────────────────────────────────────────────────╯
+  ╭───────────────────────────── snapshot ──────────────────────────────╮
+  │ fj-queue v0.0.0-test @ git.example.com   as_of=2026-05-27T14:03:11Z │
+  │ runners: 2 online / 3    totals: running=1  waiting=3  total=4      │
+  │ schedulable_labels: [docker, gpu, grunt]                            │
+  ╰─────────────────────────────────────────────────────────────────────╯
                                    Runners                                 
   ┏━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
   ┃ name         ┃ status  ┃ online ┃ version ┃ labels        ┃ ephemeral ┃
@@ -305,11 +305,11 @@
 # ---
 # name: test_rich_metrics_unavailable_golden_width_120_no_color
   '''
-  ╭─────────────────────────── snapshot ───────────────────────────╮
-  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z        │
-  │ runners: 1 online / 1    totals: running=0  waiting=0  total=0 │
-  │ schedulable_labels: [docker, grunt]                            │
-  ╰────────────────────────────────────────────────────────────────╯
+  ╭───────────────────────────── snapshot ──────────────────────────────╮
+  │ fj-queue v0.0.0-test @ git.example.com   as_of=2026-05-27T14:03:11Z │
+  │ runners: 1 online / 1    totals: running=0  waiting=0  total=0      │
+  │ schedulable_labels: [docker, grunt]                                 │
+  ╰─────────────────────────────────────────────────────────────────────╯
                                  Runners                                
   ┏━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
   ┃ name       ┃ status ┃ online ┃ version ┃ labels        ┃ ephemeral ┃
@@ -335,11 +335,11 @@
 # ---
 # name: test_rich_ncps_active_golden_width_120_no_color
   '''
-  ╭─────────────────────────── snapshot ───────────────────────────╮
-  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z        │
-  │ runners: 1 online / 1    totals: running=0  waiting=0  total=0 │
-  │ schedulable_labels: [grunt]                                    │
-  ╰────────────────────────────────────────────────────────────────╯
+  ╭───────────────────────────── snapshot ──────────────────────────────╮
+  │ fj-queue v0.0.0-test @ git.example.com   as_of=2026-05-27T14:03:11Z │
+  │ runners: 1 online / 1    totals: running=0  waiting=0  total=0      │
+  │ schedulable_labels: [grunt]                                         │
+  ╰─────────────────────────────────────────────────────────────────────╯
                               Runners                            
   ┏━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┓
   ┃ name       ┃ status ┃ online ┃ version ┃ labels ┃ ephemeral ┃
@@ -370,11 +370,11 @@
 # ---
 # name: test_rich_ncps_unavailable_golden_width_120_no_color
   '''
-  ╭─────────────────────────── snapshot ───────────────────────────╮
-  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z        │
-  │ runners: 1 online / 1    totals: running=0  waiting=0  total=0 │
-  │ schedulable_labels: [grunt]                                    │
-  ╰────────────────────────────────────────────────────────────────╯
+  ╭───────────────────────────── snapshot ──────────────────────────────╮
+  │ fj-queue v0.0.0-test @ git.example.com   as_of=2026-05-27T14:03:11Z │
+  │ runners: 1 online / 1    totals: running=0  waiting=0  total=0      │
+  │ schedulable_labels: [grunt]                                         │
+  ╰─────────────────────────────────────────────────────────────────────╯
                               Runners                            
   ┏━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┓
   ┃ name       ┃ status ┃ online ┃ version ┃ labels ┃ ephemeral ┃
@@ -400,11 +400,11 @@
 # ---
 # name: test_rich_runner_resources_golden_width_120_no_color
   '''
-  ╭─────────────────────────── snapshot ───────────────────────────╮
-  │ fj-queue @ git.example.com   as_of=2026-05-27T14:03:11Z        │
-  │ runners: 1 online / 1    totals: running=0  waiting=0  total=0 │
-  │ schedulable_labels: [docker, grunt]                            │
-  ╰────────────────────────────────────────────────────────────────╯
+  ╭───────────────────────────── snapshot ──────────────────────────────╮
+  │ fj-queue v0.0.0-test @ git.example.com   as_of=2026-05-27T14:03:11Z │
+  │ runners: 1 online / 1    totals: running=0  waiting=0  total=0      │
+  │ schedulable_labels: [docker, grunt]                                 │
+  ╰─────────────────────────────────────────────────────────────────────╯
                                  Runners                                
   ┏━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
   ┃ name       ┃ status ┃ online ┃ version ┃ labels        ┃ ephemeral ┃

@@ -3,7 +3,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "httpx==0.27.2",
+#     "httpx==0.28.1",
 #     "rich==13.9.4",
 # ]
 # ///
@@ -1357,6 +1357,11 @@ class Snapshot:
     queue: tuple[Job, ...]
     schedulable_labels: tuple[str, ...]
     warnings: tuple[Warning, ...]
+    # Tool version (the fj-queue release), shown in the human renderer
+    # headers. Distinct from schema_version (the JSON wire contract).
+    # Defaulted to the module __version__; aggregate() lets a caller (and
+    # the tests) override it so golden snapshots do not churn on a bump.
+    tool_version: str = __version__
     # Per-pod runner CPU/memory from Prometheus (M-metrics). Passed
     # through unchanged by aggregate() (which stays pure / I/O-free); the
     # actual Prometheus fetch happens in _do_one_fetch. `runner_pods` is
@@ -1436,6 +1441,7 @@ def aggregate(
     filter_repo: str | None = None,
     filter_label: tuple[str, ...] = (),
     schema_version: int = 1,
+    tool_version: str = __version__,
     runner_pods: tuple[PodResource, ...] = (),
     metrics_error: str | None = None,
     ncps: NcpsStatus | None = None,
@@ -1461,6 +1467,9 @@ def aggregate(
       filter_repo: echoes the --repo scope decision (CLI in M6).
       filter_label: echoes the --label scope decision (CLI in M6).
       schema_version: integer version pinned at the wire layer.
+      tool_version: the fj-queue release string for the renderer header
+                    and the JSON `tool_version` field (defaults to the
+                    module __version__).
       runner_pods: per-pod CPU/memory rows pre-fetched from Prometheus
                    (the I/O lives in _do_one_fetch; aggregate stays pure).
                    Empty when metrics are disabled or the fetch failed.
@@ -1591,6 +1600,7 @@ def aggregate(
         as_of=now,
         host=host,
         schema_version=schema_version,
+        tool_version=tool_version,
         filter_repo=filter_repo,
         filter_label=filter_label,
         runners=runners_tuple,
@@ -1768,6 +1778,10 @@ def to_dict(snap: Snapshot) -> dict:
 
     return {
         "schema_version": snap.schema_version,
+        # The fj-queue release that produced this document. Distinct from
+        # schema_version (the wire-format version); lets agents log/branch
+        # on the producing tool version. Additive top-level key.
+        "tool_version": snap.tool_version,
         "as_of": _rfc3339_utc_z(snap.as_of),
         "host": snap.host,
         "filter": {
@@ -2022,7 +2036,9 @@ def render_plain(snap: "Snapshot") -> str:
 
     # Header.
     as_of = _rfc3339_utc_z(snap.as_of)
-    lines.append(f"fj-queue snapshot  as_of={as_of}  host={snap.host}")
+    lines.append(
+        f"fj-queue v{snap.tool_version}  as_of={as_of}  host={snap.host}"
+    )
     f_repo = snap.filter_repo if snap.filter_repo else "-"
     f_label = (
         _format_str_list(snap.filter_label) if snap.filter_label else "-"
@@ -2160,6 +2176,7 @@ def render_rich(snap: "Snapshot"):
     t = snap.totals
     header_text = Text()
     header_text.append("fj-queue ", style="bold")
+    header_text.append(f"v{snap.tool_version} ", style="dim")
     header_text.append(f"@ {snap.host}", style="cyan")
     header_text.append(f"   as_of={_rfc3339_utc_z(snap.as_of)}\n", style="dim")
     header_text.append("runners: ", style="bold")

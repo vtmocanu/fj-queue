@@ -123,6 +123,7 @@ def test_empty_snapshot_has_all_v1_keys():
     d = fq.to_dict(snap)
     assert set(d.keys()) == {
         "schema_version",
+        "tool_version",
         "as_of",
         "host",
         "filter",
@@ -138,6 +139,8 @@ def test_empty_snapshot_has_all_v1_keys():
         "ncps_error",
     }
     assert d["schema_version"] == 1
+    # tool_version defaults to the live module version on the wire.
+    assert d["tool_version"] == fq.__version__
     assert d["host"] == HOST
     assert d["filter"] == {"repo": None, "label": None}
     assert d["totals"] == {"running": 0, "waiting": 0, "total": 0}
@@ -162,6 +165,13 @@ def test_empty_snapshot_has_all_v1_keys():
 def test_empty_snapshot_validates_against_schema(schema):
     snap = _snap()
     jsonschema.validate(fq.to_dict(snap), schema)
+
+
+def test_tool_version_override_reaches_the_wire(schema):
+    snap = _snap(tool_version="1.2.3")
+    d = fq.to_dict(snap)
+    assert d["tool_version"] == "1.2.3"
+    jsonschema.validate(d, schema)
 
 
 def test_as_of_is_rfc3339_utc_z():
@@ -290,7 +300,8 @@ def test_render_json_is_byte_stable_under_frozen_clock():
 def test_render_json_top_level_keys_are_sorted_alphabetically():
     """Explicit assertion: the FIRST top-level key encountered in the
     JSON string is `as_of` (alphabetically before `filter`, `host`,
-    `per_repo`, `queue`, `runners`, ...).
+    `per_repo`, `queue`, `runners`, `schema_version`, `tool_version`,
+    ...).
     """
     rendered = fq.render_json(_snap())
     parsed = json.loads(rendered)
@@ -499,10 +510,15 @@ def test_schema_validates_c3_docker_plus_gpu_split_scenario(schema):
 # ---------------------------------------------------------------------------
 # Open additive-only schema (PRD §JSON contract, locked policy):
 #   * Top-level oneOf branches (SuccessEnvelope, ErrorEnvelope) are
-#     CLOSED, only to disambiguate the two envelope shapes.
+#     CLOSED, only to disambiguate the two envelope shapes. New
+#     top-level keys ARE still added within v1.x (e.g. ncps_error,
+#     tool_version); because the branch is closed, they are reflected
+#     in the committed schema and consumers validate against the
+#     published schema for the version they target, not a pinned copy.
 #   * Every inner object (Runner, Job, RepoBreakdown, totals, filter,
 #     error, Warning) is OPEN: new optional fields land in v1.x
-#     without bumping schema_version.
+#     without bumping schema_version AND without breaking a consumer
+#     pinned to an older copy of the schema.
 # ---------------------------------------------------------------------------
 
 
@@ -525,7 +541,7 @@ def test_schema_closes_only_the_two_oneof_branches_not_inner_objects(schema):
     assert "additionalProperties" not in error_obj
 
 
-@pytest.mark.parametrize("key", ["warnings", "ncps", "ncps_error"])
+@pytest.mark.parametrize("key", ["warnings", "ncps", "ncps_error", "tool_version"])
 def test_schema_rejects_missing_required_top_level_key(schema, key):
     """The closed top-level envelope catches missing keys (drift between
     to_dict and the schema). Dropping any required key must fail validation.
