@@ -76,3 +76,15 @@ Running from the checkout (`uv run fj_queue.py`) tests the working-tree code; a 
 Tagging `v*` triggers `.github/workflows/release.yml`: it cuts a GitHub Release (auto notes) and regenerates + pushes the Homebrew formula to `vtmocanu/homebrew-tap`. The generic render-and-publish mechanics live in the reusable `homebrew-tap.yml` in `github.com/vtmocanu/task`, included by `Taskfile.yml` (`task brew:formula` / `brew:publish`, using `HOMEBREW_TAP_TOKEN`); this repo owns only the formula body in `Formula.rb.tmpl` (placeholders `@@URL@@` / `@@SHA256@@`). CI sets `TASK_X_REMOTE_TASKFILES=1` and runs `task --yes` because the include is fetched over https. The release flow never touches source logic.
 
 The releaser must ensure the GitHub Release page for the tag carries the CHANGELOG entry for that version, not just the workflow's auto-generated commit notes. Before tagging: rename the `CHANGELOG.md` `[Unreleased]` section to the version being cut (with the date), and after the release publishes, confirm the Release page body contains that changelog section (edit the release to prepend it if the auto-notes alone landed).
+
+After a release publishes, upgrade the local Homebrew install so the released artifact can be tested via brew (not just from the checkout):
+
+```bash
+brew update && brew upgrade fj-queue
+# If `brew update` reports a stale lock ("Another `brew update` process is already running")
+# and no real one is, refresh the tap directly and skip auto-update:
+git -C "$(brew --repository vtmocanu/tap)" pull --ff-only
+HOMEBREW_NO_AUTO_UPDATE=1 brew upgrade fj-queue
+```
+
+Then verify `fj-queue --version` reports the new version (the brew binary is `/opt/homebrew/bin/fj-queue`, distinct from the repo's `./fj-queue` checkout symlink).
