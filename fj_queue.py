@@ -69,7 +69,7 @@ EXIT_INTERRUPTED = 130
 # Tool version (distinct from the JSON schema_version). Surfaced by
 # `--version`. 0.x while the tool stabilizes; the CLI/JSON surface may
 # still change before a 1.0.
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 
 
 # ---------------------------------------------------------------------------
