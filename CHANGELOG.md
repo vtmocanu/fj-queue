@@ -12,7 +12,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - **`tool_version` in JSON output.** `--format json` now includes a top-level
-  `"tool_version"` string field (e.g. `"0.0.1"`) in every success snapshot.
+  `"tool_version"` string field (e.g. `"0.1.0"`) in every success snapshot.
   It is required and always present. This field carries the fj-queue release
   that produced the document, and is distinct from `schema_version` (the
   wire-format contract version, which stays `1`). Agents that need to log or
@@ -22,6 +22,13 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Version in renderer headers.** The plain-text header now reads
   `fj-queue v<version>  as_of=...  host=...`. The Rich renderer header shows
   `fj-queue` followed by a dim `v<version>` then `@ <host>`.
+
+### Changed
+
+- **Release tooling.** The Homebrew formula render/publish now consumes the
+  reusable `homebrew-tap.yml` from `vtmocanu/task`; this repo keeps only the
+  formula body in `Formula.rb.tmpl` (placeholders `@@URL@@` / `@@SHA256@@`).
+  No change to how `brew install fj-queue` works.
 
 ---
 
