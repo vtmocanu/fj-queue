@@ -69,7 +69,7 @@ EXIT_INTERRUPTED = 130
 # Tool version (distinct from the JSON schema_version). Surfaced by
 # `--version`. 0.x while the tool stabilizes; the CLI/JSON surface may
 # still change before a 1.0.
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 # ---------------------------------------------------------------------------
@@ -1211,7 +1211,18 @@ def fetch_ncps_status(
 #
 #   5. Ordering contracts (used by M3 JSON serialization for byte-stable
 #      output): runners by name, per_repo by repo slug, queue by job id
-#      asc, warnings by job_id, schedulable_labels alphabetical.
+#      asc, warnings by (job_id, code), schedulable_labels alphabetical.
+#
+#   6. Wedged-sentinel warning (`wedged_sentinel`, heuristic): a waiting
+#      job whose needs are all namespaced under its own name
+#      (`<name>.<inner>`) is the workflow_call v15-expansion caller
+#      sentinel. When its repo shows NO other activity (no running job,
+#      no waiting non-sentinel job), it is flagged as possibly wedged
+#      per forgejo#12127 (a rerun-targeted sentinel stays `waiting`
+#      forever and holds its concurrency group). blocked_reason stays
+#      `blocked_on_needs`; the warning is additive on top. Repo-level
+#      approximation only -- the admin jobs payload has no run_id; see
+#      docs/caveats.md.
 #
 # Empty-runs_on note (intentional design choice, flagged for review):
 # under rule 1, an empty runs_on is trivially a subset of every label
@@ -1242,6 +1253,10 @@ BLOCKED_WAITING_FOR_RUNNER = "waiting_for_runner"
 
 # Warning vocabulary (PRD JSON contract).
 WARN_UNSCHEDULABLE_LABELS = "unschedulable_labels"
+# Heuristic detection of a rerun-wedged workflow_call sentinel job
+# (forgejo#12127). See _is_sentinel_shaped + the aggregate() emission
+# site for the exact signature and suppression rules.
+WARN_WEDGED_SENTINEL = "wedged_sentinel"
 
 
 def is_online(runner: Runner) -> bool:
@@ -1320,9 +1335,12 @@ class Totals:
 
 @dataclass(frozen=True)
 class Warning:  # noqa: A001 (intentional shadow within module; PRD-named)
-    """Structured warning row. M2 currently emits only
-    `code == "unschedulable_labels"` (the genuine stuck case). The model
-    is structured so M3+ can add new codes additively without changing
+    """Structured warning row. Two codes are emitted today:
+    `unschedulable_labels` (no online runner can satisfy runs_on -- the
+    genuine stuck case) and `wedged_sentinel` (heuristic: a
+    workflow_call expansion sentinel waiting with no other activity in
+    its repo, possibly wedged per forgejo#12127). The model is
+    structured so new codes can be added additively without changing
     the JSON shape.
 
     Name `Warning` matches the PRD §Architecture-notes model list; it
@@ -1402,6 +1420,35 @@ def _job_runs_on_satisfied_by_any(
         if runs_on_set.issubset(labels):
             return True
     return False
+
+
+def _is_sentinel_shaped(job: RawJob) -> bool:
+    """True iff the job looks like a workflow_call expansion sentinel.
+
+    Under Forgejo v15 workflow_call expansion, the CALLER job (the
+    `uses:` wrapper) is kept as a non-dispatchable "sentinel" row in
+    the job table: it has an empty runs_on, never gets a task, and its
+    `needs` list is exactly its own inner (expanded) jobs, each
+    namespaced as `<own-name>.<inner-job-id>` (e.g. job `pipeline`
+    needs `pipeline.lint`, `pipeline.release`, ...). The server
+    finalizes it once all inner jobs finish. A Forgejo bug
+    (forgejo#12127) leaves a rerun-targeted sentinel permanently in
+    `waiting`; such a run holds its concurrency group forever and
+    starves later runs.
+
+    Signature used here: status == waiting AND needs is non-empty AND
+    every entry in needs starts with `<job-name>.`. Known false
+    negative: a wrapper job that sets a display `name:` override does
+    NOT match, because the wire `name` then differs from the job id
+    its inner jobs are namespaced under. We accept the false negative
+    rather than loosening the signature (which would start matching
+    ordinary fan-in jobs).
+    """
+    return (
+        job.status == _STATUS_WAITING
+        and bool(job.needs)
+        and all(n.startswith(job.name + ".") for n in job.needs)
+    )
 
 
 def _derive_blocked_reason(
@@ -1553,6 +1600,23 @@ def aggregate(
 
     # Build the waiting-only queue with position + blocked_reason.
     waiting_jobs = [j for j in jobs_list if j.status == _STATUS_WAITING]
+
+    # Wedged-sentinel detection (forgejo#12127). A repo counts as
+    # "active" when it has a running job, or a waiting job that is NOT
+    # itself sentinel-shaped. Sentinel-shaped jobs are excluded from
+    # the suppressor set deliberately: two wedged sentinels in the same
+    # repo must not vouch for each other (both should warn). This is a
+    # repo-level approximation: the admin jobs payload carries no
+    # run_id, so "no sibling in the same RUN" is not observable; see
+    # docs/caveats.md for the false-positive/false-negative envelope.
+    sentinel_shaped_ids = {j.id for j in jobs_list if _is_sentinel_shaped(j)}
+    active_repo_ids = {
+        j.repo_id
+        for j in jobs_list
+        if j.status == _STATUS_RUNNING
+        or (j.status == _STATUS_WAITING and j.id not in sentinel_shaped_ids)
+    }
+
     queue_list: list[Job] = []
     warnings_list: list[Warning] = []
     for idx, j in enumerate(waiting_jobs, start=1):
@@ -1593,8 +1657,30 @@ def aggregate(
                     ),
                 )
             )
+        if j.id in sentinel_shaped_ids and j.repo_id not in active_repo_ids:
+            warnings_list.append(
+                Warning(
+                    code=WARN_WEDGED_SENTINEL,
+                    job_id=j.id,
+                    repo=slug,
+                    runs_on=j.runs_on,
+                    message=(
+                        f"Job '{j.name}' (attempt {j.attempt}) of {slug} "
+                        f"is waiting on {len(j.needs)} needs but no "
+                        f"sibling job is running or queued; possibly a "
+                        f"wedged workflow_call sentinel holding its "
+                        f"concurrency group (forgejo#12127). If it "
+                        f"persists across snapshots, cancel the run."
+                    ),
+                )
+            )
 
-    warnings_tuple = tuple(sorted(warnings_list, key=lambda w: w.job_id))
+    # Sort key includes code so a job carrying two warning rows (cannot
+    # happen today, but additive codes may overlap later) stays
+    # byte-deterministic on the wire.
+    warnings_tuple = tuple(
+        sorted(warnings_list, key=lambda w: (w.job_id, w.code))
+    )
 
     return Snapshot(
         as_of=now,

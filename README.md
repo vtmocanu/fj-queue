@@ -9,8 +9,10 @@ A read-only Forgejo Actions runner and CI queue dashboard.
 ![fj-queue](docs/img/hero.png)
 
 Polls the Forgejo admin Actions API and renders runner inventory, queue totals,
-per-repo backlog, a FIFO-approximate queue order, and unschedulable-job
-warnings. Designed for two audiences:
+per-repo backlog, a FIFO-approximate queue order, and structured warnings for
+unschedulable jobs and possibly wedged workflow_call sentinels (forgejo#12127,
+see [Caveats](docs/caveats.md#wedged-sentinel-detection-is-heuristic)).
+Designed for two audiences:
 
 - **Humans**: a live, in-place refreshing terminal UI (Rich) so an operator
   can see at a glance whether CI is saturated.

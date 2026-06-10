@@ -7,6 +7,27 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.0] - 2026-06-10
+
+### Added
+
+- **`wedged_sentinel` warning.** Heuristic detection of rerun-wedged
+  workflow_call expansion sentinels (forgejo#12127). A waiting job whose
+  `needs` are all namespaced under its own name (`<name>.<inner>`) is the
+  caller-side sentinel that Forgejo v15 expansion keeps in the job table;
+  when its repo shows no other running or queued job, fj-queue emits a
+  structured warning (`code: "wedged_sentinel"`) suggesting the run may be
+  permanently wedged and holding its concurrency group. The queue row's
+  `blocked_reason` is unchanged (`blocked_on_needs`); the warning is
+  additive. Detection is repo-level (the admin jobs payload carries no run
+  id) and heuristic; the false-positive/false-negative envelope is
+  documented in `docs/caveats.md`. `warnings` are now sorted by
+  `(job_id, code)` (previously `job_id`; byte-identical for all snapshots
+  with at most one warning per job). No `schema_version` bump: the new code
+  is additive within the open v1 `Warning` object.
+
+---
+
 ## [0.1.0] - 2026-05-31
 
 ### Added

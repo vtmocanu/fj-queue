@@ -95,7 +95,7 @@
           "items": { "$ref": "#/$defs/Job" }
         },
         "warnings": {
-          "description": "Structured warning rows. Sorted by job_id.",
+          "description": "Structured warning rows. Sorted by (job_id, code). Codes: `unschedulable_labels`, `wedged_sentinel`.",
           "type": "array",
           "items": { "$ref": "#/$defs/Warning" }
         },
@@ -305,7 +305,7 @@
       "required": ["code", "job_id", "repo", "runs_on", "message"],
       "properties": {
         "code": {
-          "description": "Structured warning code. M3 currently emits only `unschedulable_labels`; additive in future versions.",
+          "description": "Structured warning code. Currently emitted: `unschedulable_labels` (no online runner can satisfy runs_on) and `wedged_sentinel` (heuristic: a waiting workflow_call expansion sentinel with no other activity in its repo, possibly wedged per forgejo#12127); additive in future versions.",
           "type": "string"
         },
         "job_id": { "type": "integer" },

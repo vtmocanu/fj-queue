@@ -29,7 +29,7 @@ A success snapshot:
   "totals": { "running": 6, "waiting": 31, "total": 37 },  // instance-wide
   "per_repo": [ /* RepoBreakdown objects, sorted by repo slug */ ],
   "queue":   [ /* Job objects (waiting only), sorted by job_id ascending */ ],
-  "warnings":[ /* Warning objects, sorted by job_id */ ],
+  "warnings":[ /* Warning objects, sorted by (job_id, code) */ ],
   "runner_pods": [ /* PodResource objects, sorted by pod name */ ],
   "metrics": { "source": "prometheus", "error": null, "rate_window": "5m" },
   "ncps": { /* NcpsStatus object, or null when disabled or fetch failed */ },
@@ -85,10 +85,24 @@ The JSON is serialized with `sort_keys=True`. Within arrays:
 - `queue` is sorted by `job_id` ascending (FIFO approximation; see [Caveats](caveats.md)).
 - `per_repo` is sorted by repo slug.
 - `runners` is sorted by name.
-- `warnings` is sorted by `job_id`.
+- `warnings` is sorted by `(job_id, code)`.
 - `runner_pods` is sorted by pod name.
 
 `position` on each `queue` entry is 1-based over waiting jobs only.
+
+## Warning codes
+
+Each `warnings` entry carries a structured `code`. Two codes are emitted
+today (the set is additive within v1.x):
+
+- `unschedulable_labels`: no online runner's label set is a superset of the
+  job's `runs_on`; the job can never be dispatched as things stand.
+- `wedged_sentinel`: a waiting job shaped like a workflow_call expansion
+  sentinel (every `needs` entry namespaced under its own name) whose repo
+  shows no other running or queued job; possibly wedged per forgejo#12127 and
+  holding its concurrency group. This is a heuristic with a documented
+  false-positive/false-negative envelope; see
+  [Caveats](caveats.md#wedged-sentinel-detection-is-heuristic).
 
 ## Open additive-only schema policy
 

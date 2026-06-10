@@ -568,6 +568,155 @@ def test_warnings_sorted_by_job_id():
     assert [w.job_id for w in snap.warnings] == [10, 20, 30]
 
 
+def test_warnings_sorted_by_job_id_then_code_across_codes():
+    """The sort key is (job_id, code): a wedged sentinel with a HIGHER
+    job_id sorts after an unschedulable warning with a lower one, and
+    the order is deterministic regardless of emission order.
+    """
+    runners = [_runner(1, status="active", labels=("grunt",))]
+    jobs = [
+        # repo 1: wedged sentinel (no other activity in repo 1).
+        _sentinel_job(50, repo_id=1, name="pipeline"),
+        # repo 2: unschedulable.
+        _job(10, repo_id=2, runs_on=("nope",)),
+    ]
+    repo_names = {1: "alpha/repo", 2: "beta/repo"}
+    snap = _agg(runners=runners, jobs=jobs, repo_names=repo_names)
+    assert [(w.job_id, w.code) for w in snap.warnings] == [
+        (10, fq.WARN_UNSCHEDULABLE_LABELS),
+        (50, fq.WARN_WEDGED_SENTINEL),
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Wedged workflow_call sentinel detection (forgejo#12127).
+#
+# Under v15 expansion, the caller job is kept as a non-dispatchable
+# "sentinel": waiting, empty runs_on, needs = its own inner jobs
+# namespaced `<own-name>.<inner>`. A rerun-targeted sentinel can wedge
+# permanently in `waiting` and hold its concurrency group. aggregate()
+# warns when a sentinel-shaped waiting job's repo shows NO other
+# activity (no running job, no waiting non-sentinel job).
+# ---------------------------------------------------------------------------
+
+
+def _sentinel_job(jid, *, repo_id=100, name="pipeline", attempt=2):
+    """A sentinel-shaped waiting job: needs all namespaced under its
+    own name, empty runs_on (as Forgejo emits for the caller job).
+    """
+    return _job(
+        jid,
+        status="waiting",
+        repo_id=repo_id,
+        name=name,
+        runs_on=(),
+        needs=(f"{name}.lint", f"{name}.test", f"{name}.release"),
+        attempt=attempt,
+    )
+
+
+def _wedged_warnings(snap):
+    return [w for w in snap.warnings if w.code == fq.WARN_WEDGED_SENTINEL]
+
+
+def test_wedged_sentinel_alone_warns():
+    """A sentinel-shaped waiting job with no other job in its repo gets
+    the wedged_sentinel warning. blocked_reason stays blocked_on_needs
+    (the warning is additive, not a new blocked_reason value).
+    """
+    runners = [_runner(1, status="active", labels=("grunt",))]
+    jobs = [_sentinel_job(10, repo_id=42, name="pipeline", attempt=2)]
+    snap = _agg(runners=runners, jobs=jobs, repo_names={42: "owner/app"})
+    assert snap.queue[0].blocked_reason == fq.BLOCKED_ON_NEEDS
+    warns = _wedged_warnings(snap)
+    assert len(warns) == 1
+    w = warns[0]
+    assert w.job_id == 10
+    assert w.repo == "owner/app"
+    assert w.runs_on == ()
+    assert w.message == (
+        "Job 'pipeline' (attempt 2) of owner/app is waiting on 3 needs "
+        "but no sibling job is running or queued; possibly a wedged "
+        "workflow_call sentinel holding its concurrency group "
+        "(forgejo#12127). If it persists across snapshots, cancel the "
+        "run."
+    )
+
+
+def test_wedged_sentinel_suppressed_by_running_sibling_in_same_repo():
+    """A running job in the same repo means the run is making progress;
+    the sentinel is just normally waiting on its inner jobs.
+    """
+    runners = [_runner(1, status="active", labels=("grunt",))]
+    jobs = [
+        _sentinel_job(10, repo_id=42),
+        _job(11, status="running", task_id=99, repo_id=42,
+             runs_on=("grunt",), name="pipeline.lint"),
+    ]
+    snap = _agg(runners=runners, jobs=jobs, repo_names={42: "owner/app"})
+    assert _wedged_warnings(snap) == []
+
+
+def test_wedged_sentinel_suppressed_by_waiting_non_sentinel_sibling():
+    """A waiting NON-sentinel job in the same repo (e.g. an inner job
+    queued for a runner) also counts as activity: no warning.
+    """
+    runners = [_runner(1, status="active", labels=("grunt",))]
+    jobs = [
+        _sentinel_job(10, repo_id=42),
+        _job(11, status="waiting", repo_id=42, runs_on=("grunt",),
+             needs=(), name="build"),
+    ]
+    snap = _agg(runners=runners, jobs=jobs, repo_names={42: "owner/app"})
+    assert _wedged_warnings(snap) == []
+
+
+def test_two_same_repo_wedged_sentinels_both_warn():
+    """Two wedged sentinels in the same repo must NOT vouch for each
+    other: the activity suppressor set excludes sentinel-shaped jobs,
+    so BOTH warn.
+    """
+    runners = [_runner(1, status="active", labels=("grunt",))]
+    jobs = [
+        _sentinel_job(10, repo_id=42, name="pipeline"),
+        _sentinel_job(20, repo_id=42, name="release"),
+    ]
+    snap = _agg(runners=runners, jobs=jobs, repo_names={42: "owner/app"})
+    assert [w.job_id for w in _wedged_warnings(snap)] == [10, 20]
+
+
+def test_plain_chain_tail_needs_is_not_sentinel_shaped():
+    """An ordinary fan-in/chain-tail job (needs=('lint',), names NOT
+    namespaced under its own name) never matches the sentinel
+    signature, even when it is the only job in its repo.
+    """
+    runners = [_runner(1, status="active", labels=("grunt",))]
+    jobs = [
+        _job(10, repo_id=42, runs_on=("grunt",), needs=("lint",),
+             name="deploy"),
+    ]
+    snap = _agg(runners=runners, jobs=jobs, repo_names={42: "owner/app"})
+    assert snap.queue[0].blocked_reason == fq.BLOCKED_ON_NEEDS
+    assert _wedged_warnings(snap) == []
+
+
+def test_activity_in_a_different_repo_does_not_suppress():
+    """The suppressor is repo-scoped: a running job in ANOTHER repo says
+    nothing about this repo's sentinel; the warning still fires.
+    """
+    runners = [_runner(1, status="active", labels=("grunt",))]
+    jobs = [
+        _sentinel_job(10, repo_id=42),
+        _job(11, status="running", task_id=99, repo_id=99,
+             runs_on=("grunt",), name="other-repo-job"),
+    ]
+    repo_names = {42: "owner/app", 99: "owner/other"}
+    snap = _agg(runners=runners, jobs=jobs, repo_names=repo_names)
+    warns = _wedged_warnings(snap)
+    assert [w.job_id for w in warns] == [10]
+    assert warns[0].repo == "owner/app"
+
+
 # ---------------------------------------------------------------------------
 # Live fixture smoke test (the snapshot the wider test suite snapshots in M7).
 # ---------------------------------------------------------------------------
@@ -663,9 +812,12 @@ def test_clock_injection_as_of_round_trips_exactly():
 
 
 def test_live_fixture_aggregates_consistently():
-    """Smoke against the live-captured fixtures from M1. Confirms the
-    two waiting jobs (both with non-empty needs in the live capture)
-    are blocked_on_needs and NOT emit warnings.
+    """Smoke against the live-captured fixtures from M1. The waiting
+    job 79969 is a REAL captured wedged workflow_call sentinel
+    (attempt=2, needs all namespaced `pipeline.*`, no other activity in
+    its repo) -- the canonical regression case for the wedged_sentinel
+    warning. Its blocked_reason stays blocked_on_needs, and no
+    unschedulable_labels warning fires.
     """
     runners = _load_fixture_runners()
     jobs = _load_fixture_jobs()
@@ -683,15 +835,24 @@ def test_live_fixture_aggregates_consistently():
     # contribute to schedulable_labels.
     assert snap.schedulable_labels == ("docker", "grunt")
 
-    # The waiting job (id=79969) has 7 needs -> blocked_on_needs, NOT a
-    # warning, even though its runs_on=[] (which would otherwise be
-    # debated).
+    # The waiting job (id=79969) has 7 needs -> blocked_on_needs, NOT
+    # unschedulable, even though its runs_on=[] (which would otherwise
+    # be debated).
     waiting = [j for j in snap.queue if j.job_id == 79969]
     assert len(waiting) == 1
     assert waiting[0].blocked_reason == fq.BLOCKED_ON_NEEDS
-    # No `unschedulable_labels` warnings should fire on the live
-    # snapshot.
-    assert snap.warnings == ()
+
+    # Exactly ONE warning: the wedged sentinel. Job 79969 is named
+    # `pipeline`, all 7 needs start with `pipeline.`, and the only
+    # other job in the snapshot runs in a DIFFERENT repo (589), so the
+    # repo-activity suppressor does not apply.
+    assert len(snap.warnings) == 1
+    w = snap.warnings[0]
+    assert w.code == fq.WARN_WEDGED_SENTINEL
+    assert w.job_id == 79969
+    assert w.repo == "owner-b/harbor"
+    assert "(attempt 2)" in w.message
+    assert "forgejo#12127" in w.message
 
     # The waiting job is in `owner-b/harbor` per the repo_names map.
     assert waiting[0].repo == "owner-b/harbor"

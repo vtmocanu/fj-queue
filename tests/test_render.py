@@ -335,6 +335,53 @@ def test_rich_golden_snapshot_empty_width_120_no_color(snapshot):
 
 
 # ---------------------------------------------------------------------------
+# Wedged workflow_call sentinel warning (forgejo#12127) rendering.
+# ---------------------------------------------------------------------------
+
+
+def _wedged_snap():
+    """A snapshot whose only waiting job is a wedged workflow_call
+    sentinel: needs all namespaced under its own name, empty runs_on,
+    rerun attempt, and NO other job in its repo.
+    """
+    runners = [
+        _runner(3, name="k8s-runner", status="active", labels=("docker", "grunt")),
+    ]
+    jobs = [
+        _job(79969, status="waiting", repo_id=586, owner_id=15,
+             runs_on=(), attempt=2, name="pipeline",
+             needs=("pipeline.lint", "pipeline.test", "pipeline.release")),
+    ]
+    return _snap(
+        runners=runners,
+        jobs=jobs,
+        repo_names={586: "owner-b/harbor"},
+    )
+
+
+def test_plain_wedged_sentinel_warning_present():
+    out = fq.render_plain(_wedged_snap())
+    assert "wedged_sentinel" in out
+    assert "forgejo#12127" in out
+    # The queue row itself stays blocked_on_needs.
+    assert "[blocked_on_needs" in out
+
+
+def test_rich_wedged_sentinel_warning_present():
+    text = _render_rich_to_text(_wedged_snap(), width=200, color=False)
+    assert "wedged_sentinel" in text
+    assert "forgejo#12127" in text
+
+
+def test_plain_wedged_sentinel_golden(snapshot):
+    assert fq.render_plain(_wedged_snap()) == snapshot
+
+
+def test_rich_wedged_sentinel_golden_width_120_no_color(snapshot):
+    assert _render_rich_to_text(_wedged_snap(), width=120, color=False) == snapshot
+
+
+# ---------------------------------------------------------------------------
 # Renderers consume Snapshot only: no I/O, no recomputation, no clock.
 # ---------------------------------------------------------------------------
 

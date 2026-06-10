@@ -248,7 +248,7 @@ def test_blocked_reason_enum_values_appear_unchanged_on_wire():
 
 
 def test_warnings_carry_unschedulable_labels_code(schema):
-    """Single warning case currently emitted. Validates against the
+    """First of the two warning codes. Validates against the
     Warning sub-schema via the parent doc validation.
     """
     runners = [_runner(1, status="active", labels=("grunt",))]
@@ -261,6 +261,35 @@ def test_warnings_carry_unschedulable_labels_code(schema):
     assert w["job_id"] == 10
     assert w["runs_on"] == ["nope"]
     assert "No online runner can satisfy" in w["message"]
+    jsonschema.validate(d, schema)
+
+
+def test_warnings_carry_wedged_sentinel_code(schema):
+    """Second warning code: a workflow_call expansion sentinel waiting
+    with no other activity in its repo (forgejo#12127). Mirrors the
+    unschedulable_labels wire-shape test, incl. schema validation.
+    """
+    runners = [_runner(1, status="active", labels=("grunt",))]
+    jobs = [
+        _job(
+            10,
+            runs_on=(),
+            needs=("pipeline.lint", "pipeline.release"),
+            name="pipeline",
+            attempt=2,
+        ),
+    ]
+    snap = _snap(runners=runners, jobs=jobs, repo_names={85: "owner/app"})
+    d = fq.to_dict(snap)
+    assert len(d["warnings"]) == 1
+    w = d["warnings"][0]
+    assert w["code"] == "wedged_sentinel"
+    assert w["job_id"] == 10
+    assert w["runs_on"] == []
+    assert "wedged workflow_call sentinel" in w["message"]
+    assert "forgejo#12127" in w["message"]
+    # blocked_reason on the queue row is unchanged by the warning.
+    assert d["queue"][0]["blocked_reason"] == "blocked_on_needs"
     jsonschema.validate(d, schema)
 
 
@@ -641,8 +670,13 @@ def test_live_fixture_renders_valid_json(schema):
     # Wire-facing sanity:
     assert parsed["totals"] == {"running": 1, "waiting": 1, "total": 2}
     assert parsed["schedulable_labels"] == ["docker", "grunt"]
-    # The waiting job (id=79969) is blocked_on_needs, so no warnings.
-    assert parsed["warnings"] == []
+    # The waiting job (id=79969) is blocked_on_needs (no
+    # unschedulable_labels warning), BUT it is a real captured wedged
+    # workflow_call sentinel (needs all `pipeline.*`, no other job in
+    # its repo), so exactly one wedged_sentinel warning is on the wire.
+    assert len(parsed["warnings"]) == 1
+    assert parsed["warnings"][0]["code"] == "wedged_sentinel"
+    assert parsed["warnings"][0]["job_id"] == 79969
     assert parsed["queue"][0]["job_id"] == 79969
     assert parsed["queue"][0]["blocked_reason"] == "blocked_on_needs"
     # task_id null on the wire for the waiting job.

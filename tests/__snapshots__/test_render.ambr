@@ -222,6 +222,34 @@
       -> No online runner can satisfy runs_on: ['nonexistent']
   '''
 # ---
+# name: test_plain_wedged_sentinel_golden
+  '''
+  fj-queue v0.0.0-test  as_of=2026-05-27T14:03:11Z  host=git.example.com
+    filter: repo=-  label=-
+    schedulable_labels: [docker, grunt]
+  
+  TOTALS: running=0  waiting=1  total=1
+  
+  RUNNERS (1 online of 1):
+    k8s-runner               active   online   v12.7.3    labels=[docker, grunt]  ephemeral=False
+  
+  RUNNER RESOURCES (per pod, 0):
+    (none)
+  
+  NCPS: no data
+  
+  PER REPO (1 repos):
+    owner-b/harbor                    running=0  waiting=1  total=1
+  
+  QUEUE (1 waiting):
+    #1   [blocked_on_needs   ] job_id=79969  repo=owner-b/harbor  name="pipeline"
+          attempt=2  runs_on=[]  needs=[pipeline.lint, pipeline.test, pipeline.release]
+  
+  WARNINGS (1):
+    wedged_sentinel  job_id=79969  repo=owner-b/harbor  runs_on=[]
+      -> Job 'pipeline' (attempt 2) of owner-b/harbor is waiting on 3 needs but no sibling job is running or queued; possibly a wedged workflow_call sentinel holding its concurrency group (forgejo#12127). If it persists across snapshots, cancel the run.
+  '''
+# ---
 # name: test_rich_golden_snapshot_empty_width_120_no_color
   '''
   ╭───────────────────────────── snapshot ──────────────────────────────╮
@@ -431,6 +459,52 @@
   ┡━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━┩
   │   │        │ (empty) │          │         │         │       │                │
   └───┴────────┴─────────┴──────────┴─────────┴─────────┴───────┴────────────────┘
+  
+  '''
+# ---
+# name: test_rich_wedged_sentinel_golden_width_120_no_color
+  '''
+  ╭───────────────────────────── snapshot ──────────────────────────────╮
+  │ fj-queue v0.0.0-test @ git.example.com   as_of=2026-05-27T14:03:11Z │
+  │ runners: 1 online / 1    totals: running=0  waiting=1  total=1      │
+  │ schedulable_labels: [docker, grunt]                                 │
+  ╰─────────────────────────────────────────────────────────────────────╯
+                                 Runners                                
+  ┏━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
+  ┃ name       ┃ status ┃ online ┃ version ┃ labels        ┃ ephemeral ┃
+  ┡━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
+  │ k8s-runner │ active │  yes   │ v12.7.3 │ docker, grunt │    no     │
+  └────────────┴────────┴────────┴─────────┴───────────────┴───────────┘
+               Runner resources (per pod)              
+  ┏━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
+  ┃ pod    ┃ node ┃ cpu (cores) ┃ mem (usage / limit) ┃
+  ┡━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
+  │ (none) │      │             │                     │
+  └────────┴──────┴─────────────┴─────────────────────┘
+  NCPS: no data
+                     Per repo                   
+  ┏━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┓
+  ┃ repo           ┃ running ┃ waiting ┃ total ┃
+  ┡━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━┩
+  │ owner-b/harbor │       0 │       1 │     1 │
+  └────────────────┴─────────┴─────────┴───────┘
+                                                Queue (waiting, FIFO approx)                                              
+  ┏━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
+  ┃ # ┃ job_id ┃ repo           ┃ job_name ┃   attempt ┃ runs_on ┃ needs                              ┃ blocked_reason   ┃
+  ┡━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
+  │ 1 │  79969 │ owner-b/harbor │ pipeline │ 2 (rerun) │ -       │ pipeline.lint, pipeline.test,      │ blocked_on_needs │
+  │   │        │                │          │           │         │ pipeline.release                   │                  │
+  └───┴────────┴────────────────┴──────────┴───────────┴─────────┴────────────────────────────────────┴──────────────────┘
+                                                          Warnings                                                        
+  ┏━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+  ┃ code            ┃ job_id ┃ repo           ┃ runs_on ┃ message                                                        ┃
+  ┡━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+  │ wedged_sentinel │  79969 │ owner-b/harbor │ []      │ Job 'pipeline' (attempt 2) of owner-b/harbor is waiting on 3   │
+  │                 │        │                │         │ needs but no sibling job is running or queued; possibly a      │
+  │                 │        │                │         │ wedged workflow_call sentinel holding its concurrency group    │
+  │                 │        │                │         │ (forgejo#12127). If it persists across snapshots, cancel the   │
+  │                 │        │                │         │ run.                                                           │
+  └─────────────────┴────────┴────────────────┴─────────┴────────────────────────────────────────────────────────────────┘
   
   '''
 # ---
