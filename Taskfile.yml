@@ -11,10 +11,15 @@ vars:
   # Local checkout while developing; public raw URL in CI (no token needed).
   TASK_REPO_LOCAL: ~/stuff/gitrepos/gh/vtmocanu/task
   TASK_REPO_RAW: https://raw.githubusercontent.com/vtmocanu/task/main
+  # The brew include runs in release.yml with HOMEBREW_TAP_TOKEN in scope, so
+  # it is pinned to a commit SHA in CI: a compromised task@main must not reach
+  # a cross-repo write PAT. Bump the SHA deliberately when homebrew-tap.yml
+  # changes upstream. (Mirrors cc-statusline's setup.)
+  TASK_REPO_RAW_PINNED: https://raw.githubusercontent.com/vtmocanu/task/bccb39125de3f275e9451c4963d23f6afb31b342
 
 includes:
   brew:
-    taskfile: "{{if .CI}}{{.TASK_REPO_RAW}}/homebrew-tap.yml{{else}}{{.TASK_REPO_LOCAL}}/homebrew-tap.yml{{end}}"
+    taskfile: "{{if .CI}}{{.TASK_REPO_RAW_PINNED}}/homebrew-tap.yml{{else}}{{.TASK_REPO_LOCAL}}/homebrew-tap.yml{{end}}"
     vars:
       NAME: fj-queue
       GH_REPO: vtmocanu/fj-queue
