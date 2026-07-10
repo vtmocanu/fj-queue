@@ -27,8 +27,11 @@ Install with [Homebrew](https://brew.sh):
 
 ```bash
 brew tap vtmocanu/tap
+brew trust vtmocanu/tap    # Homebrew 6.0+ requires trusting third-party taps
 brew install fj-queue
 ```
+
+(On Homebrew older than 6.0, skip the `brew trust` line. `brew trust --formula vtmocanu/tap/fj-queue` scopes trust to just this formula.)
 
 This pulls in `uv` and Python automatically. Then run:
 
