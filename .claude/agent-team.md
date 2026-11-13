@@ -23,7 +23,7 @@ team_name + name + subagent_type) + SendMessage + TaskUpdate.
 
 Default flow for a typical task:
 1. Spawn coder with the full task context. The coder runs
-   `uv run --frozen --group dev pytest tests/` before reporting done.
+   `uv run --locked --group dev pytest tests/` before reporting done.
 2. After coder reports done, spawn reviewer + auditor + tester IN PARALLEL with
    the coder's diff + report. (tester re-runs the suite and adds coverage;
    reviewer checks correctness/contract; auditor checks token/HTTP safety.)
@@ -53,9 +53,9 @@ Therefore every spawn prompt MUST include:
 - Language/runtime: Python >= 3.11, single module `fj_queue.py` (repo root);
   `fj-queue` is a symlink to it.
 - Package manager: `uv` (`pyproject.toml`, `uv.lock`).
-- Test command: `uv run --frozen --group dev pytest tests/`
+- Test command: `uv run --locked --group dev pytest tests/`
 - Snapshot update: `uv run --group dev pytest tests/ --snapshot-update`
-- Test stack: pytest 8.3.4 + syrupy (snapshots, `tests/__snapshots__/`) +
+- Test stack: pytest + syrupy (versions pinned in `pyproject.toml`) (snapshots, `tests/__snapshots__/`) +
   respx (httpx mocking) + jsonschema.
 - Stability surfaces: JSON contract `schema/fj-queue.v1.json` guarded by
   `tests/test_json_contract.py`; syrupy snapshots for CLI/render output.

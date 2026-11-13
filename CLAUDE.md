@@ -29,14 +29,14 @@ Use the lightest mode that fits; reserve the full team for work that actually ne
 
 ```bash
 uv sync --group dev                              # install dev deps
-uv run --frozen --group dev pytest tests/        # full suite (mirrors CI exactly)
+uv run --locked --group dev pytest tests/        # full suite (mirrors CI exactly)
 uv run --group dev pytest tests/test_render.py   # one file
 uv run --group dev pytest -k watch               # by keyword
 uv run --group dev pytest --snapshot-update      # regenerate syrupy snapshots after intentional render changes
 uv run fj_queue.py --host git.example.com        # run from checkout (or ./fj-queue symlink)
 ```
 
-CI (`.github/workflows/test.yml`) runs `pytest` on Python 3.11/3.12/3.13 with `--frozen`; keep `uv.lock` in sync. There is no separate lint step.
+CI (`.github/workflows/test.yml`) runs `pytest` on Python 3.11/3.12/3.13 with `--locked`, which fails when `uv.lock` is out of sync with `pyproject.toml`; regenerate it with `uv lock`. There is no separate lint step.
 
 ## Architecture
 

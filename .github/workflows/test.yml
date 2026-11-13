@@ -35,4 +35,4 @@ jobs:
             uv.lock
 
       - name: Run tests
-        run: uv run --frozen --group dev pytest tests/
+        run: uv run --locked --group dev pytest tests/
