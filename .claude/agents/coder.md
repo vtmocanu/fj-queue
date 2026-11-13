@@ -7,7 +7,7 @@ model: sonnet
 Implement the requested change. Read referenced spec or task files first if any
 are mentioned. Run the test suite before reporting completion to the team lead:
 
-    uv run --frozen --group dev pytest tests/
+    uv run --locked --group dev pytest tests/
 
 Project specifics for fj-queue:
 - All implementation lives in a single module, `fj_queue.py` at the repo root.

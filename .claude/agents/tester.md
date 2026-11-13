@@ -9,7 +9,7 @@ Validate the change. fj-queue has a real pytest suite; use it.
 
 1. Run the existing suite first:
 
-       uv run --frozen --group dev pytest tests/
+       uv run --locked --group dev pytest tests/
 
    Then add tests that exercise the new behavior, following the existing layout
    and style:
