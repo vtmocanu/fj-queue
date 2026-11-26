@@ -4,7 +4,7 @@ version = "0.2.0"
 description = "Forgejo Actions runner & CI queue dashboard"
 requires-python = ">=3.11"
 dependencies = [
-    "httpx==0.28.1",
+    "httpx==0.29.0",
     "rich==15.0.0",
 ]
 
@@ -15,7 +15,7 @@ dependencies = [
 # the dev group as a standalone environment.
 [dependency-groups]
 dev = [
-    "httpx==0.28.1",
+    "httpx==0.29.0",
     "jsonschema==4.26.0",
     "pytest==9.2.0",
     "respx==0.23.1",
